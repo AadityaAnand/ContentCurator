@@ -1,10 +1,15 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore",
+    )
     # Database
-    DATABASE_URL: str = "postgresql://curator:curator_dev_password@localhost:5432/content_curator"
+    DATABASE_URL: str = "postgresql://aadityaanand@localhost:5432/content_curator"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
@@ -42,9 +47,4 @@ class Settings(BaseSettings):
     CACHE_TTL_MEDIUM: int = 3600  # 1 hour
     CACHE_TTL_LONG: int = 86400  # 24 hours
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
-
 settings = Settings()

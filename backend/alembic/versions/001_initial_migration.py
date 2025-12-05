@@ -5,12 +5,33 @@ Revises:
 Create Date: 2024-12-03 00:00:00.000000
 
 """
+from pathlib import Path
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from pgvector.sqlalchemy import Vector
+
+# Try to import Vector, use TEXT as fallback for Phase 1
+try:
+    from pgvector.sqlalchemy import Vector
+    VECTOR_LIBRARY_AVAILABLE = True
+except ImportError:
+    VECTOR_LIBRARY_AVAILABLE = False
+    Vector = None
+
+
+def _vector_extension_available() -> bool:
+    """Return True if the pgvector extension control file exists for the local Postgres install."""
+    possible_paths = [
+        Path("/opt/homebrew/opt/postgresql@15/share/postgresql@15/extension/vector.control"),
+        Path("/opt/homebrew/share/postgresql@15/extension/vector.control"),
+        Path("/usr/local/share/postgresql/extension/vector.control"),
+    ]
+    return any(p.exists() for p in possible_paths)
+
+
+VECTOR_EXTENSION_AVAILABLE = VECTOR_LIBRARY_AVAILABLE and _vector_extension_available()
 
 # revision identifiers, used by Alembic.
 revision: str = '001'
@@ -20,8 +41,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Enable pgvector extension
-    op.execute('CREATE EXTENSION IF NOT EXISTS vector')
+    # Enable pgvector extension only if control file exists; otherwise skip (Phase 2 feature)
+    if VECTOR_EXTENSION_AVAILABLE:
+        op.execute('CREATE EXTENSION IF NOT EXISTS vector')
+    else:
+        print("Warning: pgvector extension not available; embeddings will be stored as TEXT")
     
     # Create categories table
     op.create_table(
@@ -86,11 +110,13 @@ def upgrade() -> None:
     )
     
     # Create embeddings table
+    # Use TEXT for vector column if pgvector not available (Phase 1)
+    vector_col = Vector(768) if VECTOR_EXTENSION_AVAILABLE and Vector else sa.Text()
     op.create_table(
         'embeddings',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('article_id', sa.Integer(), nullable=False),
-        sa.Column('vector', Vector(768), nullable=True),
+        sa.Column('vector', vector_col, nullable=True),
         sa.Column('model_name', sa.String(length=100), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.ForeignKeyConstraint(['article_id'], ['articles.id'], ondelete='CASCADE'),
@@ -107,7 +133,7 @@ def upgrade() -> None:
         sa.Column('target_article_id', sa.Integer(), nullable=False),
         sa.Column('similarity_score', sa.Float(), nullable=False),
         sa.Column('connection_type', sa.String(length=50), nullable=True),
-        sa.Column('metadata', postgresql.JSON(astext_type=sa.Text()), nullable=True),
+        sa.Column('connection_metadata', postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.ForeignKeyConstraint(['source_article_id'], ['articles.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['target_article_id'], ['articles.id'], ondelete='CASCADE'),
