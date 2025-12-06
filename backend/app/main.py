@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import ingestion, articles
+from app.routers import ingestion, articles, embeddings
 import logging
 
 # Configure logging
@@ -33,6 +33,7 @@ app.add_middleware(
 # Include routers
 app.include_router(ingestion.router, prefix=settings.API_V1_PREFIX)
 app.include_router(articles.router, prefix=settings.API_V1_PREFIX)
+app.include_router(embeddings.router, prefix=f"{settings.API_V1_PREFIX}/embeddings", tags=["embeddings"])
 
 
 @app.get("/")

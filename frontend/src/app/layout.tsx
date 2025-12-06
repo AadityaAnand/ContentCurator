@@ -15,7 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body suppressHydrationWarning>
         <Providers>
           <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
             <Navigation />

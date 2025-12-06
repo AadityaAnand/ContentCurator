@@ -91,7 +91,7 @@ class Embedding(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     article_id = Column(Integer, ForeignKey('articles.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
-    vector = Column(Vector(768))  # Dimension depends on Ollama model, nomic-embed-text uses 768
+    vector = Column(Text)  # Store as TEXT until pgvector is available
     model_name = Column(String(100), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

@@ -5,6 +5,7 @@ import { articlesApi } from '@/lib/api'
 import { formatDateTime, formatRelativeTime, getSourceColor, getCategoryColor } from '@/lib/utils'
 import { ExternalLink, Loader2, Calendar, User as UserIcon } from 'lucide-react'
 import Link from 'next/link'
+import RelatedArticles from '@/components/RelatedArticles'
 
 export default function ArticleDetailPage({ params }: { params: { id: string } }) {
   const articleId = parseInt(params.id)
@@ -150,13 +151,10 @@ export default function ArticleDetailPage({ params }: { params: { id: string } }
           </div>
         )}
       </article>
-
-      {/* Related Articles Section (placeholder for Phase 2) */}
+      {/* Related Articles Section */}
       <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Related Articles</h2>
-        <p className="text-gray-600 dark:text-gray-400">
-          Related articles will be shown here once the knowledge graph is implemented (Phase 2).
-        </p>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Related Articles</h2>
+        <RelatedArticles articleId={articleId} limit={5} />
       </div>
     </div>
   )
