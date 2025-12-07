@@ -1,7 +1,6 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { articlesApi } from '@/lib/api'
 import { Loader2, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import { formatRelativeTime, getSourceColor } from '@/lib/utils'
@@ -11,26 +10,41 @@ interface RelatedArticlesProps {
   limit?: number
 }
 
+interface RelatedArticle {
+  id: number
+  title: string
+  url: string
+  source_name: string
+  source_type?: string
+  similarity_score: number
+  published_at: string
+}
+
 export default function RelatedArticles({ articleId, limit = 5 }: RelatedArticlesProps) {
   const { data: relatedArticles, isLoading, error } = useQuery({
     queryKey: ['related-articles', articleId],
     queryFn: async () => {
-      const url = `http://localhost:8000/api/embeddings/related/${articleId}?limit=${limit}`
-      console.log('Fetching related articles from:', url)
-      const response = await fetch(url)
-      console.log('Response status:', response.status)
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Error response:', errorText)
-        throw new Error(`Failed to fetch related articles: ${response.status}`)
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const url = `${apiUrl}/api/embeddings/related/${articleId}?limit=${limit}`
+        const response = await fetch(url, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+        if (!response.ok) {
+          console.error(`API responded with status ${response.status}`)
+          return []
+        }
+        return response.json()
+      } catch (err) {
+        console.error('Failed to fetch related articles:', err)
+        return []
       }
-      const data = await response.json()
-      console.log('Related articles data:', data)
-      return data
     },
+    enabled: !!articleId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
   })
-
-  console.log('RelatedArticles render - loading:', isLoading, 'error:', error, 'data:', relatedArticles)
 
   if (isLoading) {
     return (
@@ -58,9 +72,8 @@ export default function RelatedArticles({ articleId, limit = 5 }: RelatedArticle
 
   return (
     <div className="space-y-4">
-      {relatedArticles.map((item: any) => {
-        const article = item.article
-        const similarity = item.similarity_score
+      {relatedArticles.map((article: RelatedArticle) => {
+        const similarity = article.similarity_score
 
         return (
           <div
@@ -77,8 +90,8 @@ export default function RelatedArticles({ articleId, limit = 5 }: RelatedArticle
                 </Link>
                 
                 <div className="flex items-center gap-3 mt-2 text-sm text-gray-600 dark:text-gray-400">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSourceColor(article.source_type)}`}>
-                    {article.source_type.toUpperCase()}
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSourceColor(article.source_type || 'rss')}`}>
+                    {(article.source_type || 'RSS').toUpperCase()}
                   </span>
                   {article.published_at && (
                     <span>{formatRelativeTime(article.published_at)}</span>
@@ -87,12 +100,6 @@ export default function RelatedArticles({ articleId, limit = 5 }: RelatedArticle
                     {Math.round(similarity * 100)}% similar
                   </span>
                 </div>
-
-                {article.summary?.executive_summary && (
-                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-                    {article.summary.executive_summary}
-                  </p>
-                )}
               </div>
 
               <a

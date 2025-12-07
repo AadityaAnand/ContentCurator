@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { articlesApi, categoriesApi } from '@/lib/api'
 import { ArticleCard } from '@/components/ArticleCard'
 import { Pagination } from '@/components/Pagination'
+import { SearchModeToggle, SemanticSearchResults } from '@/components/SemanticSearch'
 import { Search, Filter, Loader2 } from 'lucide-react'
 
 export default function ArticlesPage() {
@@ -13,6 +14,7 @@ export default function ArticlesPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [selectedSourceType, setSelectedSourceType] = useState<string>('')
   const [searchInput, setSearchInput] = useState('')
+  const [searchMode, setSearchMode] = useState<'text' | 'semantic'>('text')
   const pageSize = 10
 
   // Fetch categories
@@ -71,31 +73,54 @@ export default function ArticlesPage() {
         </p>
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-6">
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search articles..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
-          </div>
-          <button
-            type="submit"
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            Search
-          </button>
-        </form>
-      </div>
+      {/* Search Mode Toggle */}
+      <SearchModeToggle mode={searchMode} onChange={setSearchMode} />
 
-      {/* Filters */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-3">
+      {searchMode === 'semantic' ? (
+        // Semantic Search Results
+        <div className="mb-6">
+          <div className="flex gap-2 mb-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search semantically (by meaning)..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+          <SemanticSearchResults query={searchInput} />
+        </div>
+      ) : (
+        // Traditional Search
+        <>
+          {/* Search Bar */}
+          <div className="mb-6">
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Search articles..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                type="submit"
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                Search
+              </button>
+            </form>
+          </div>
+
+          {/* Filters */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
           <Filter className="h-5 w-5 text-gray-500" />
           <span className="font-medium text-gray-700 dark:text-gray-300">Filters:</span>
           {(searchQuery || selectedCategory || selectedSourceType) && (
@@ -172,6 +197,31 @@ export default function ArticlesPage() {
                 Try adjusting your search or filters
               </p>
             </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                {data.items.map((article) => (
+                  <ArticleCard key={article.id} article={article} />
+                ))}
+              </div>
+
+              {/* Pagination */}
+              {data.total_pages > 1 && (
+                <Pagination
+                  currentPage={page}
+                  totalPages={data.total_pages}
+                  onPageChange={setPage}
+                />
+              )}
+            </>
+          )}
+        </>
+      )}
+    </>
+  )}
+    </div>
+  )
+}
           ) : (
             <>
               <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
