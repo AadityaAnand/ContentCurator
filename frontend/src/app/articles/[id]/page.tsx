@@ -6,9 +6,11 @@ import { formatDateTime, formatRelativeTime, getSourceColor, getCategoryColor } 
 import { ExternalLink, Loader2, Calendar, User as UserIcon } from 'lucide-react'
 import Link from 'next/link'
 import RelatedArticles from '@/components/RelatedArticles'
+import { use } from 'react'
 
-export default function ArticleDetailPage({ params }: { params: { id: string } }) {
-  const articleId = parseInt(params.id)
+export default function ArticleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+  const articleId = parseInt(id)
 
   const { data: article, isLoading, error } = useQuery({
     queryKey: ['article', articleId],

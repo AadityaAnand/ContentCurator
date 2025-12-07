@@ -8,7 +8,7 @@ import logging
 from app.database import get_db
 from app.models import Article, Embedding, Connection
 from app.services.ollama_service import OllamaService
-from app.schemas import ArticleDetail
+from app.schemas import ArticleDetailResponse
 from app.config import settings
 
 router = APIRouter()

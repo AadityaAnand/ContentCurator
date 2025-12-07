@@ -15,13 +15,22 @@ export default function RelatedArticles({ articleId, limit = 5 }: RelatedArticle
   const { data: relatedArticles, isLoading, error } = useQuery({
     queryKey: ['related-articles', articleId],
     queryFn: async () => {
-      const response = await fetch(`http://localhost:8000/api/embeddings/related/${articleId}?limit=${limit}`)
+      const url = `http://localhost:8000/api/embeddings/related/${articleId}?limit=${limit}`
+      console.log('Fetching related articles from:', url)
+      const response = await fetch(url)
+      console.log('Response status:', response.status)
       if (!response.ok) {
-        throw new Error('Failed to fetch related articles')
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        throw new Error(`Failed to fetch related articles: ${response.status}`)
       }
-      return response.json()
+      const data = await response.json()
+      console.log('Related articles data:', data)
+      return data
     },
   })
+
+  console.log('RelatedArticles render - loading:', isLoading, 'error:', error, 'data:', relatedArticles)
 
   if (isLoading) {
     return (
