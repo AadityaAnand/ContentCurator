@@ -10,7 +10,7 @@ export function Navigation() {
             <Link href="/" className="flex items-center">
               <BookOpen className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
               <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white">
-                Content Curator
+                Jnana
               </span>
             </Link>
             <div className="hidden sm:ml-8 sm:flex sm:space-x-8">

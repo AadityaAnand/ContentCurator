@@ -4,7 +4,7 @@ import { Navigation } from '@/components/Navigation'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Content Curator - Multi-Modal Knowledge Discovery',
+  title: 'Jnana - Multi-Modal Knowledge Discovery',
   description: 'An intelligent content aggregation and knowledge discovery platform powered by Ollama',
 }
 
