@@ -27,12 +27,46 @@ interface GraphLink {
   strength: number
 }
 
+const graphModeInfo = {
+  force: {
+    title: 'Force-Directed Layout',
+    description: 'Physics-based simulation where articles naturally cluster based on their semantic relationships.',
+    insights: [
+      'Clusters reveal groups of topically related articles',
+      'Central nodes often represent "hub" articles connecting multiple topics',
+      'Distance between nodes indicates semantic similarity',
+      'Isolated nodes suggest unique or outlier content'
+    ]
+  },
+  radial: {
+    title: 'Radial Layout',
+    description: 'Circular arrangement providing a balanced view of all articles and their interconnections.',
+    insights: [
+      'Equal visibility for all articles regardless of connection count',
+      'Connection patterns across the circle show cross-topic relationships',
+      'Density of connections indicates content cohesion',
+      'Gaps suggest opportunities for content expansion'
+    ]
+  },
+  hierarchical: {
+    title: 'Hierarchical Layout',
+    description: 'Organized by connection count, placing highly connected "hub" articles at the top.',
+    insights: [
+      'Top rows show your most interconnected content',
+      'Reveals content authority and influence within your library',
+      'Bottom rows indicate specialized or niche articles',
+      'Vertical structure shows information architecture'
+    ]
+  }
+}
+
 export default function GraphPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const [zoom, setZoom] = useState(1)
   const [selectedNode, setSelectedNode] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<'force' | 'radial' | 'hierarchical'>('force')
+  const [showInfo, setShowInfo] = useState(true)
 
   // Fetch articles
   const { data: articles, isLoading: articlesLoading } = useQuery({
@@ -410,6 +444,56 @@ export default function GraphPage() {
         )}
 
         <svg ref={svgRef} className="w-full h-full" style={{ touchAction: 'manipulation' }} />
+
+        {/* Info Panel */}
+        {showInfo && (
+          <div className="absolute top-4 right-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg p-5 max-w-md border border-gray-200 dark:border-gray-700">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+                  {graphModeInfo[viewMode].title}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowInfo(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+              {graphModeInfo[viewMode].description}
+            </p>
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 mb-3">
+              <h4 className="font-semibold text-sm text-indigo-900 dark:text-indigo-300 mb-2">
+                💡 What You Can Learn:
+              </h4>
+              <ul className="space-y-1.5">
+                {graphModeInfo[viewMode].insights.map((insight, i) => (
+                  <li key={i} className="text-xs text-gray-700 dark:text-gray-300 flex items-start">
+                    <span className="text-indigo-600 dark:text-indigo-400 mr-2 mt-0.5">•</span>
+                    <span>{insight}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <button
+              onClick={() => setShowInfo(false)}
+              className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            >
+              Hide this panel
+            </button>
+          </div>
+        )}
+
+        {!showInfo && (
+          <button
+            onClick={() => setShowInfo(true)}
+            className="absolute top-4 right-4 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-colors"
+          >
+            ℹ️ Show Info
+          </button>
+        )}
 
         {/* Legend */}
         <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-lg p-4 max-w-xs border border-gray-200 dark:border-gray-700">
