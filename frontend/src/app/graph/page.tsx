@@ -32,6 +32,7 @@ export default function GraphPage() {
   const svgRef = useRef<SVGSVGElement>(null)
   const [zoom, setZoom] = useState(1)
   const [selectedNode, setSelectedNode] = useState<number | null>(null)
+  const [viewMode, setViewMode] = useState<'force' | 'radial' | 'hierarchical'>('force')
 
   // Fetch articles
   const { data: articles, isLoading: articlesLoading } = useQuery({
@@ -90,12 +91,12 @@ export default function GraphPage() {
 
   // Initialize D3 graph
   useEffect(() => {
-    if (!graphData || !graphData.nodes || graphData.nodes.length === 0 || !svgRef.current) {
+    if (!graphData || !graphData.nodes || graphData.nodes.length === 0 || !svgRef.current || !containerRef.current) {
       return
     }
 
-    const width = containerRef.current?.clientWidth || 800
-    const height = containerRef.current?.clientHeight || 600
+    const width = containerRef.current.clientWidth
+    const height = containerRef.current.clientHeight
 
     // Clear previous content
     d3.select(svgRef.current).selectAll('*').remove()
@@ -109,47 +110,142 @@ export default function GraphPage() {
     // Add zoom behavior
     const g = svg.append('g')
 
-    const zoomHandler = d3.zoom<SVGSVGElement, unknown>().on('zoom', (event: any) => {
-      g.attr('transform', event.transform)
-    })
+    const zoomHandler = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 4])
+      .on('zoom', (event: any) => {
+        g.attr('transform', event.transform)
+      })
 
     svg.call(zoomHandler)
 
-    // Create force simulation
-    const simulation = d3
-      .forceSimulation(graphData.nodes as any)
-      .force('link', d3.forceLink(graphData.links).id((d: any) => d.id).distance(100))
-      .force('charge', d3.forceManyBody().strength(-300))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(50))
+    // Create simulation based on view mode
+    let simulation: any
 
-    // Create links
+    if (viewMode === 'force') {
+      simulation = d3
+        .forceSimulation(graphData.nodes as any)
+        .force('link', d3.forceLink(graphData.links).id((d: any) => d.id).distance(150))
+        .force('charge', d3.forceManyBody().strength(-400))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(60))
+    } else if (viewMode === 'radial') {
+      // Radial layout - strongest connections in center
+      const centerNode = graphData.nodes[0]
+      const radius = Math.min(width, height) / 3
+      
+      graphData.nodes.forEach((node: any, i: number) => {
+        const angle = (i / graphData.nodes.length) * 2 * Math.PI
+        node.fx = width / 2 + radius * Math.cos(angle)
+        node.fy = height / 2 + radius * Math.sin(angle)
+      })
+    } else if (viewMode === 'hierarchical') {
+      // Hierarchical layout - organize by connection strength
+      const nodeConnections = new Map<number, number>()
+      graphData.links.forEach((link: any) => {
+        nodeConnections.set(link.source, (nodeConnections.get(link.source) || 0) + 1)
+        nodeConnections.set(link.target, (nodeConnections.get(link.target) || 0) + 1)
+      })
+
+      const sortedNodes = [...graphData.nodes].sort((a: any, b: any) => 
+        (nodeConnections.get(b.id) || 0) - (nodeConnections.get(a.id) || 0)
+      )
+
+      sortedNodes.forEach((node: any, i: number) => {
+        const level = Math.floor(i / 3)
+        const posInLevel = i % 3
+        node.fx = width / 4 + (posInLevel * width / 3)
+        node.fy = 100 + level * 120
+      })
+    }
+
+    // Create links with gradient for connection strength
+    const defs = svg.append('defs')
+    const gradient = defs.append('linearGradient')
+      .attr('id', 'link-gradient')
+      .attr('gradientUnits', 'userSpaceOnUse')
+
+    gradient.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', '#06b6d4')
+      .attr('stop-opacity', 0.3)
+
+    gradient.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', '#6366f1')
+      .attr('stop-opacity', 0.8)
+
     const links = g
       .append('g')
       .selectAll('line')
       .data(graphData.links as any)
       .join('line')
-      .attr('stroke', '#999')
-      .attr('stroke-opacity', (d: any) => 0.3 + d.strength * 0.4)
-      .attr('stroke-width', (d: any) => 1 + d.strength * 2)
+      .attr('stroke', (d: any) => d.strength > 0.7 ? '#6366f1' : d.strength > 0.5 ? '#8b5cf6' : '#94a3b8')
+      .attr('stroke-opacity', (d: any) => 0.3 + d.strength * 0.5)
+      .attr('stroke-width', (d: any) => 1 + d.strength * 3)
+      .attr('stroke-dasharray', (d: any) => d.strength < 0.5 ? '5,5' : '0')
 
-    // Create nodes
-    const nodes = g
+    // Create node groups
+    const nodeGroups = g
       .append('g')
-      .selectAll<SVGCircleElement, any>('circle')
+      .selectAll('g')
       .data(graphData.nodes as any)
-      .join('circle')
-      .attr('r', 8)
-      .attr('fill', (d: any) => (d.id === selectedNode ? '#4f46e5' : '#06b6d4'))
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 2)
+      .join('g')
       .attr('cursor', 'pointer')
       .on('click', (event: any, d: any) => {
         event.stopPropagation()
         setSelectedNode(d.id)
         window.location.href = `/articles/${d.id}`
       })
-      .call(
+
+    // Add node circles with size based on connections
+    nodeGroups
+      .append('circle')
+      .attr('r', (d: any) => {
+        const connections = graphData.links.filter((l: any) => 
+          l.source === d.id || l.target === d.id
+        ).length
+        return 10 + connections * 2
+      })
+      .attr('fill', (d: any) => {
+        if (d.id === selectedNode) return '#4f46e5'
+        const connections = graphData.links.filter((l: any) => 
+          l.source === d.id || l.target === d.id
+        ).length
+        return connections > 2 ? '#f59e0b' : connections > 1 ? '#06b6d4' : '#10b981'
+      })
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 2)
+
+    // Add labels
+    nodeGroups
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', 25)
+      .attr('font-size', '11px')
+      .attr('font-weight', '500')
+      .attr('fill', '#1f2937')
+      .attr('pointer-events', 'none')
+      .text((d: any) => d.title.substring(0, 20) + (d.title.length > 20 ? '...' : ''))
+
+    // Add connection count badges
+    nodeGroups
+      .append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', 4)
+      .attr('font-size', '9px')
+      .attr('font-weight', 'bold')
+      .attr('fill', '#fff')
+      .attr('pointer-events', 'none')
+      .text((d: any) => {
+        const connections = graphData.links.filter((l: any) => 
+          l.source === d.id || l.target === d.id
+        ).length
+        return connections
+      })
+
+    // Add drag behavior for force layout
+    if (viewMode === 'force' && simulation) {
+      nodeGroups.call(
         (d3.drag() as any)
           .on('start', (event: any, d: any) => {
             if (!event.active) simulation.alphaTarget(0.3).restart()
@@ -167,39 +263,32 @@ export default function GraphPage() {
           })
       )
 
-    // Add labels
-    const labels = g
-      .append('g')
-      .selectAll('text')
-      .data(graphData.nodes as any)
-      .join('text')
-      .attr('x', 0)
-      .attr('y', 0)
-      .attr('text-anchor', 'middle')
-      .attr('dominant-baseline', 'middle')
-      .attr('font-size', '11px')
-      .attr('fill', '#1f2937')
-      .attr('pointer-events', 'none')
-      .text((d: any) => d.title.substring(0, 15) + (d.title.length > 15 ? '...' : ''))
+      // Update positions on simulation tick
+      simulation.on('tick', () => {
+        links
+          .attr('x1', (d: any) => d.source.x)
+          .attr('y1', (d: any) => d.source.y)
+          .attr('x2', (d: any) => d.target.x)
+          .attr('y2', (d: any) => d.target.y)
 
-    // Update positions on simulation tick
-    simulation.on('tick', () => {
+        nodeGroups.attr('transform', (d: any) => `translate(${d.x},${d.y})`)
+      })
+    } else {
+      // Static positioning for radial and hierarchical
       links
-        .attr('x1', (d: any) => d.source.x)
-        .attr('y1', (d: any) => d.source.y)
-        .attr('x2', (d: any) => d.target.x)
-        .attr('y2', (d: any) => d.target.y)
+        .attr('x1', (d: any) => d.source.fx)
+        .attr('y1', (d: any) => d.source.fy)
+        .attr('x2', (d: any) => d.target.fx)
+        .attr('y2', (d: any) => d.target.fy)
 
-      nodes.attr('cx', (d: any) => d.x).attr('cy', (d: any) => d.y)
-
-      labels.attr('x', (d: any) => d.x).attr('y', (d: any) => d.y)
-    })
+      nodeGroups.attr('transform', (d: any) => `translate(${d.fx},${d.fy})`)
+    }
 
     // Cleanup
     return () => {
-      simulation.stop()
+      if (simulation) simulation.stop()
     }
-  }, [graphData, selectedNode])
+  }, [graphData, selectedNode, viewMode])
 
   const handleZoomIn = () => {
     setZoom((z) => Math.min(z * 1.2, 5))
@@ -225,63 +314,82 @@ export default function GraphPage() {
   const isLoading = articlesLoading || connectionsLoading
 
   return (
-    <div className="w-full h-full flex flex-col bg-white dark:bg-gray-900">
+    <div className="fixed inset-0 flex flex-col bg-white dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Knowledge Graph</h1>
-          <p className="text-gray-600 dark:text-gray-300">
-            Interactive visualization of article relationships and semantic connections
-          </p>
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-4 px-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Knowledge Graph</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Interactive visualization of article relationships
+            </p>
+          </div>
+          {graphData && (
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              <span className="font-semibold">{graphData.nodes?.length || 0}</span> articles •{' '}
+              <span className="font-semibold">{graphData.links?.length || 0}</span> connections
+            </div>
+          )}
         </div>
       </div>
 
       {/* Controls */}
-      <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {graphData && (
-              <>
-                <span>Articles: {graphData.nodes?.length || 0}</span>
-                <span className="mx-3">•</span>
-                <span>Connections: {graphData.links?.length || 0}</span>
-                <span className="mx-3">•</span>
-                <span>
-                  Density:{' '}
-                  {graphData.nodes && graphData.nodes.length > 0
-                    ? (
-                        ((graphData.links?.length || 0) * 2) /
-                        (graphData.nodes.length * (graphData.nodes.length - 1))
-                      )
-                        .toFixed(3)
-                        .substring(0, 4)
-                    : '0'}
-                </span>
-              </>
-            )}
+      <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-3 px-6">
+        <div className="flex items-center justify-between">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setViewMode('force')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'force'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              Force-Directed
+            </button>
+            <button
+              onClick={() => setViewMode('radial')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'radial'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              Radial
+            </button>
+            <button
+              onClick={() => setViewMode('hierarchical')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'hierarchical'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              Hierarchical
+            </button>
           </div>
 
           <div className="flex gap-2">
             <button
               onClick={handleZoomIn}
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
               title="Zoom in"
             >
-              <ZoomIn className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+              <ZoomIn className="h-4 w-4 text-gray-700 dark:text-gray-300" />
             </button>
             <button
               onClick={handleZoomOut}
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
               title="Zoom out"
             >
-              <ZoomOut className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+              <ZoomOut className="h-4 w-4 text-gray-700 dark:text-gray-300" />
             </button>
             <button
               onClick={handleReset}
-              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors"
               title="Reset view"
             >
-              <RotateCcw className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+              <RotateCcw className="h-4 w-4 text-gray-700 dark:text-gray-300" />
             </button>
           </div>
         </div>
@@ -304,24 +412,44 @@ export default function GraphPage() {
         <svg ref={svgRef} className="w-full h-full" style={{ touchAction: 'manipulation' }} />
 
         {/* Legend */}
-        <div className="absolute bottom-4 left-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 max-w-xs">
+        <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-lg p-4 max-w-xs border border-gray-200 dark:border-gray-700">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Legend</h3>
-          <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+          <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-cyan-500" />
-              <span>Article node (clickable)</span>
+              <div className="w-4 h-4 rounded-full bg-amber-500" />
+              <span>Hub (3+ connections)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3.5 h-3.5 rounded-full bg-cyan-500" />
+              <span>Connected (2 connections)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-emerald-500" />
+              <span>Isolated (1 connection)</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-indigo-600" />
               <span>Selected article</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-0.5 bg-gray-400" />
-              <span>Relationship (thickness = strength)</span>
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-0.5 bg-indigo-600" style={{ opacity: 0.8 }} />
+                <span>Strong (0.7+)</span>
+              </div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-0.5 bg-purple-600" style={{ opacity: 0.6 }} />
+                <span>Medium (0.5-0.7)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-0.5 bg-slate-400 border-dashed border-t" />
+                <span>Weak (&lt;0.5)</span>
+              </div>
             </div>
           </div>
-          <p className="mt-3 text-xs text-gray-500 dark:text-gray-500">
-            Drag nodes to move • Scroll to zoom • Click article to view details
+          <p className="mt-3 text-xs text-gray-500 dark:text-gray-500 italic">
+            {viewMode === 'force' && 'Drag nodes • Scroll to zoom • Click to view'}
+            {viewMode === 'radial' && 'Circular layout • Scroll to zoom • Click to view'}
+            {viewMode === 'hierarchical' && 'Organized by connections • Click to view'}
           </p>
         </div>
       </div>
