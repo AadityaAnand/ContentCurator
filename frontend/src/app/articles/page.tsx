@@ -217,30 +217,6 @@ export default function ArticlesPage() {
           )}
         </>
       )}
-    </>
-  )}
-    </div>
-  )
-}
-          ) : (
-            <>
-              <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-                Showing {(page - 1) * pageSize + 1} - {Math.min(page * pageSize, data.total)} of {data.total} articles
-              </div>
-              <div className="space-y-4">
-                {data.items.map((article) => (
-                  <ArticleCard key={article.id} article={article} />
-                ))}
-              </div>
-              {data.total_pages > 1 && (
-                <Pagination
-                  currentPage={page}
-                  totalPages={data.total_pages}
-                  onPageChange={setPage}
-                />
-              )}
-            </>
-          )}
         </>
       )}
     </div>

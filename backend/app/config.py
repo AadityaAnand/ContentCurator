@@ -9,7 +9,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     # Database
-    DATABASE_URL: str = "postgresql://aadityaanand@localhost:5432/content_curator"
+    DATABASE_URL: str = "postgresql+psycopg://aadityaanand@localhost:5432/content_curator"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
