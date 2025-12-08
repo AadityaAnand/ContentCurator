@@ -8,32 +8,32 @@ import { Loader2 } from 'lucide-react'
 
 export default function TrendsPage() {
   // Fetch all trends data
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading } = useQuery<any>({
     queryKey: ['trendsStats'],
     queryFn: trendsApi.getStats,
   })
 
-  const { data: topSources, isLoading: sourcesLoading } = useQuery({
+  const { data: topSources = [], isLoading: sourcesLoading } = useQuery<any[]>({
     queryKey: ['topSources'],
     queryFn: () => trendsApi.getTopSources(30),
   })
 
-  const { data: topCategories, isLoading: categoriesLoading } = useQuery({
+  const { data: topCategories = [], isLoading: categoriesLoading } = useQuery<any[]>({
     queryKey: ['topCategories'],
     queryFn: () => trendsApi.getTopCategories(30),
   })
 
-  const { data: articlesOverTime, isLoading: timeLoading } = useQuery({
+  const { data: articlesOverTime = [], isLoading: timeLoading } = useQuery<any[]>({
     queryKey: ['articlesOverTime'],
     queryFn: () => trendsApi.getArticlesOverTime(30),
   })
 
-  const { data: sourceDistribution, isLoading: distLoading } = useQuery({
+  const { data: sourceDistribution = [], isLoading: distLoading } = useQuery<any[]>({
     queryKey: ['sourceDistribution'],
     queryFn: () => trendsApi.getSourceDistribution(30),
   })
 
-  const { data: newestArticles } = useQuery({
+  const { data: newestArticles = [] } = useQuery<any[]>({
     queryKey: ['newestArticles'],
     queryFn: () => trendsApi.getNewestArticles(5),
   })
@@ -127,9 +127,9 @@ export default function TrendsPage() {
                         fill="#8884d8"
                         dataKey="count"
                       >
-                        {sourceDistribution.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
+                      {sourceDistribution.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
                       </Pie>
                       <Tooltip 
                         contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px' }}

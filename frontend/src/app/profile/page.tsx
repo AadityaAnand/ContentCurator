@@ -13,7 +13,7 @@ export default function ProfilePage() {
   const { user, token, isLoading: authLoading, isAuthenticated } = useAuth()
 
   // Fetch saved articles
-  const { data: savedArticles, isLoading, error, refetch } = useQuery({
+  const { data: savedArticles = [], isLoading, error, refetch } = useQuery<any[]>({
     queryKey: ['savedArticles', token],
     queryFn: () => token ? savedArticlesApi.list(token) : Promise.resolve([]),
     enabled: !!token && isAuthenticated,
