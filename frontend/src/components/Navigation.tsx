@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link'
 import { BookOpen, Search, TrendingUp, User, LogOut } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
