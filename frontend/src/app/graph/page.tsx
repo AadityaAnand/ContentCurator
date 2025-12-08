@@ -348,9 +348,9 @@ export default function GraphPage() {
   const isLoading = articlesLoading || connectionsLoading
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-white dark:bg-gray-900">
+    <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-4 px-6">
+      <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-4 px-4 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Knowledge Graph</h1>
@@ -368,12 +368,12 @@ export default function GraphPage() {
       </div>
 
       {/* Controls */}
-      <div className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-3 px-6">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-2">
+      <div className="sticky top-[120px] z-10 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-3 px-4 sm:px-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setViewMode('force')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                 viewMode === 'force'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
@@ -432,7 +432,7 @@ export default function GraphPage() {
       {/* Graph Container */}
       <div
         ref={containerRef}
-        className="flex-1 relative bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900"
+        className="flex-1 relative w-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 min-h-[400px] sm:min-h-[600px]"
       >
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
@@ -447,7 +447,7 @@ export default function GraphPage() {
 
         {/* Info Panel */}
         {showInfo && (
-          <div className="absolute top-4 right-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg p-5 max-w-md border border-gray-200 dark:border-gray-700">
+          <div className="absolute top-4 right-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg p-4 sm:p-5 max-w-sm sm:max-w-md border border-gray-200 dark:border-gray-700 text-sm sm:text-base">
             <div className="flex items-start justify-between mb-3">
               <div>
                 <h3 className="font-bold text-lg text-gray-900 dark:text-white">
@@ -496,7 +496,7 @@ export default function GraphPage() {
         )}
 
         {/* Legend */}
-        <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-lg p-4 max-w-xs border border-gray-200 dark:border-gray-700">
+        <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-lg shadow-lg p-3 sm:p-4 max-w-xs text-xs sm:text-sm border border-gray-200 dark:border-gray-700">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Legend</h3>
           <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
             <div className="flex items-center gap-2">
