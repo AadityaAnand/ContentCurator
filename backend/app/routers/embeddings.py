@@ -254,6 +254,67 @@ async def get_related_articles(
     return result
 
 
+@router.post("/search")
+async def semantic_search(
+    query: str,
+    limit: int = 10,
+    threshold: float = 0.3,
+    db: Session = Depends(get_db)
+) -> List[dict]:
+    """Search articles using semantic similarity based on embeddings."""
+    import json
+    import numpy as np
+    from scipy.spatial.distance import cosine
+    
+    if not query or len(query.strip()) == 0:
+        return []
+    
+    try:
+        # Generate embedding for query
+        query_embedding = await ollama_service.generate_embedding(query)
+        query_vector = np.array(query_embedding)
+        
+        # Get all article embeddings
+        embeddings = db.query(Embedding).all()
+        
+        if not embeddings:
+            return []
+        
+        # Calculate similarity scores
+        results = []
+        for emb in embeddings:
+            try:
+                # Parse stored embedding
+                article_vector = np.array(json.loads(emb.vector))
+                
+                # Calculate cosine similarity (1 - cosine distance)
+                similarity = 1 - cosine(query_vector, article_vector)
+                
+                if similarity >= threshold:
+                    article = db.query(Article).filter(Article.id == emb.article_id).first()
+                    if article:
+                        results.append({
+                            "id": article.id,
+                            "title": article.title,
+                            "url": article.url,
+                            "source_name": article.source_name,
+                            "published_at": article.published_at.isoformat() if article.published_at else None,
+                            "similarity_score": float(similarity),
+                            "content_preview": article.content[:200] + "..." if article.content and len(article.content) > 200 else article.content,
+                        })
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning(f"Error processing embedding {emb.id}: {e}")
+                continue
+        
+        # Sort by similarity and limit
+        results.sort(key=lambda x: x['similarity_score'], reverse=True)
+        return results[:limit]
+    
+    except Exception as e:
+        logger.error(f"Error in semantic search: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/stats")
 async def get_embedding_stats(db: Session = Depends(get_db)):
     """Get statistics about embeddings and connections."""

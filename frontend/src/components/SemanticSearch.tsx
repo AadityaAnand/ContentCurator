@@ -56,15 +56,27 @@ export function SemanticSearchResults({ query }: SemanticSearchResultsProps) {
     queryFn: async () => {
       if (!query.trim()) return []
 
-      // For now, we'll use a simple approach: fetch all articles and find semantically similar ones
-      // In a production system, this would call a backend semantic search endpoint
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      const response = await fetch(
-        `${apiUrl}/api/articles/search?query=${encodeURIComponent(query)}&page=1&page_size=20`
-      )
-      if (!response.ok) return []
-      const data = await response.json()
-      return data.items || []
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+        const response = await fetch(
+          `${apiUrl}/api/embeddings/search?query=${encodeURIComponent(query)}&limit=20&threshold=0.2`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          }
+        )
+        
+        if (!response.ok) {
+          console.error('Semantic search failed:', response.statusText)
+          return []
+        }
+        
+        const data = await response.json()
+        return data || []
+      } catch (err) {
+        console.error('Error fetching semantic search results:', err)
+        return []
+      }
     },
     enabled: query.length > 0,
   })
@@ -98,17 +110,27 @@ export function SemanticSearchResults({ query }: SemanticSearchResultsProps) {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
                 {article.title}
               </h3>
+              {article.content_preview && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                  {article.content_preview}
+                </p>
+              )}
               <div className="flex items-center gap-2 flex-wrap">
                 <span
                   className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSourceColor(
                     article.source_type
                   )}`}
                 >
-                  {article.source_type.toUpperCase()}
+                  {article.source_type?.toUpperCase() || 'RSS'}
                 </span>
                 {article.published_at && (
                   <span className="text-xs text-gray-600 dark:text-gray-400">
                     {formatRelativeTime(article.published_at)}
+                  </span>
+                )}
+                {article.similarity_score && (
+                  <span className="text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-0.5 rounded font-medium">
+                    Match: {Math.round(article.similarity_score * 100)}%
                   </span>
                 )}
               </div>
