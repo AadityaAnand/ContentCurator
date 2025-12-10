@@ -97,13 +97,18 @@ async def get_overall_stats(db: Session = Depends(get_db)):
         func.count(func.distinct(Article.source_name))
     ).scalar()
     
-    # Average articles per category
-    avg_per_category = db.query(
-        func.avg(func.count(Article.id))
+    # Average articles per category using subquery
+    category_counts = db.query(
+        Category.id,
+        func.count(Article.id).label('article_count')
     ).join(
         Article.categories
     ).group_by(
         Category.id
+    ).subquery()
+    
+    avg_per_category = db.query(
+        func.avg(category_counts.c.article_count)
     ).scalar() or 0
     
     return {
