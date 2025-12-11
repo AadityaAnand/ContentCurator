@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { articlesApi, categoriesApi } from '@/lib/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { articlesApi, categoriesApi, ingestionApi } from '@/lib/api'
 import { ArticleCard } from '@/components/ArticleCard'
 import { Pagination } from '@/components/Pagination'
 import { SearchModeToggle, SemanticSearchResults } from '@/components/SemanticSearch'
@@ -15,7 +15,11 @@ export default function ArticlesPage() {
   const [selectedSourceType, setSelectedSourceType] = useState<string>('')
   const [searchInput, setSearchInput] = useState('')
   const [searchMode, setSearchMode] = useState<'text' | 'semantic'>('text')
+  const [topicQuery, setTopicQuery] = useState('')
+  const [topicMaxResults, setTopicMaxResults] = useState(5)
+  const [topicSourceName, setTopicSourceName] = useState('')
   const pageSize = 10
+  const queryClient = useQueryClient()
 
   // Fetch categories
   const { data: categories } = useQuery({
@@ -40,10 +44,35 @@ export default function ArticlesPage() {
     },
   })
 
+  const {
+    mutate: runTopicIngest,
+    isPending: isIngesting,
+    data: ingestResult,
+    error: ingestError,
+    reset: resetIngest,
+  } = useMutation({
+    mutationFn: async () => {
+      if (!topicQuery.trim()) {
+        throw new Error('Enter a topic to ingest')
+      }
+      return ingestionApi.ingestTopic(topicQuery.trim(), topicMaxResults, topicSourceName.trim() || undefined)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['articles'] })
+      setPage(1)
+    },
+  })
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     setSearchQuery(searchInput)
     setPage(1)
+  }
+
+  const handleTopicSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    resetIngest()
+    runTopicIngest()
   }
 
   const handleCategoryChange = (category: string) => {
@@ -71,6 +100,77 @@ export default function ArticlesPage() {
         <p className="text-gray-600 dark:text-gray-300">
           Browse and search curated content from multiple sources
         </p>
+      </div>
+
+      <div className="mb-8 border border-gray-200 dark:border-gray-700 rounded-xl p-4 bg-white dark:bg-gray-900">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">On-demand topic ingestion</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Search the web, summarize with Llama, and add fresh articles. Requires TAVILY_API_KEY.
+            </p>
+          </div>
+          {isIngesting && (
+            <div className="inline-flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Ingesting…
+            </div>
+          )}
+        </div>
+        <form onSubmit={handleTopicSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-3">
+          <div className="md:col-span-6 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              value={topicQuery}
+              onChange={(e) => setTopicQuery(e.target.value)}
+              placeholder="e.g., AGI safety, diffusion models, quantum networking"
+              className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Max results (1-15)</label>
+            <input
+              type="number"
+              min={1}
+              max={15}
+              value={topicMaxResults}
+              onChange={(e) => setTopicMaxResults(Math.max(1, Math.min(15, Number(e.target.value))))}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+          <div className="md:col-span-3">
+            <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Source label (optional)</label>
+            <input
+              type="text"
+              value={topicSourceName}
+              onChange={(e) => setTopicSourceName(e.target.value)}
+              placeholder="e.g., Web Search"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            />
+          </div>
+          <div className="md:col-span-1 flex items-end">
+            <button
+              type="submit"
+              disabled={isIngesting}
+              className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+            >
+              {isIngesting ? 'Running…' : 'Ingest'}
+            </button>
+          </div>
+        </form>
+        <div className="mt-3 space-y-2">
+          {ingestResult && (
+            <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
+              {ingestResult.message} ({ingestResult.articles_created} new, {ingestResult.articles_updated} skipped)
+            </div>
+          )}
+          {ingestError instanceof Error && (
+            <div className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+              {ingestError.message}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Search Mode Toggle */}

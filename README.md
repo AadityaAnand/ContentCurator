@@ -38,6 +38,7 @@ An intelligent content aggregation and knowledge discovery platform that helps y
    cp .env.example .env
    # Edit .env with your configuration
    ```
+   - Add `TAVILY_API_KEY` from https://app.tavily.com (free tier works) for topic ingestion.
 
 2. **Ensure Ollama is running**:
    ```bash
@@ -126,6 +127,7 @@ docker-compose exec backend alembic downgrade -1
 ### Phase 1 - Content Ingestion
 - `POST /api/ingest/rss` - Ingest RSS feeds
 - `POST /api/ingest/youtube` - Ingest YouTube videos
+- `POST /api/ingest/topic` - Ingest arbitrary topics via web search (requires `TAVILY_API_KEY`)
 - `GET /api/articles` - List articles with pagination
 - `GET /api/articles/search` - Search articles
 - `GET /api/articles/{id}` - Get article details

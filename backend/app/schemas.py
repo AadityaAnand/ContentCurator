@@ -128,6 +128,12 @@ class YouTubeIngest(BaseModel):
     source_name: Optional[str] = "YouTube"
 
 
+class TopicIngest(BaseModel):
+    query: str = Field(..., min_length=2, max_length=200)
+    max_results: int = Field(default=5, ge=1, le=15)
+    source_name: Optional[str] = None
+
+
 class IngestionResponse(BaseModel):
     success: bool
     message: str

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.schemas import RSSFeedIngest, YouTubeIngest, IngestionResponse
+from app.schemas import RSSFeedIngest, YouTubeIngest, TopicIngest, IngestionResponse
 from app.services.rss_service import rss_ingestion_service
 from app.services.youtube_service import youtube_ingestion_service
+from app.services.topic_ingestion_service import topic_ingestion_service
 import logging
 
 logger = logging.getLogger(__name__)
@@ -71,4 +72,34 @@ async def ingest_youtube_video(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to ingest YouTube video: {str(e)}"
+        )
+
+
+@router.post("/topic", response_model=IngestionResponse)
+async def ingest_topic(
+    topic: TopicIngest,
+    db: Session = Depends(get_db)
+):
+    """
+    Ingest articles for an arbitrary topic using a web search API.
+
+    - **query**: Topic or keyword to search
+    - **max_results**: Number of search results to process (1-15)
+
+    The endpoint will search the web (Tavily), fetch each page, summarize with Ollama,
+    auto-categorize, and store results. Requires `TAVILY_API_KEY` in settings.
+    """
+    try:
+        logger.info(f"Ingesting topic search for: {topic.query}")
+        return await topic_ingestion_service.ingest_topic(topic, db)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error in topic ingestion endpoint: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to ingest topic: {str(e)}"
         )
