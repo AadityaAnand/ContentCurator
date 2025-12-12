@@ -220,3 +220,76 @@ async def list_categories(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list categories: {str(e)}"
         )
+
+
+@router.post("/embeddings/generate-all")
+async def trigger_generate_all_embeddings(
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger batch embedding generation for all articles without embeddings.
+    
+    Returns immediately; processing happens in the background.
+    Call this after bulk ingestion (e.g., from /api/ingest/topic) to wire up the graph.
+    """
+    from app.routers.embeddings import generate_embeddings_task
+    from fastapi import BackgroundTasks
+    from app.models import Embedding
+    
+    try:
+        # Get articles without embeddings
+        articles_without_embeddings = db.query(Article).outerjoin(Embedding).filter(
+            Embedding.id == None
+        ).all()
+        
+        if not articles_without_embeddings:
+            return {
+                "message": "All articles already have embeddings",
+                "count": 0
+            }
+        
+        article_ids = [a.id for a in articles_without_embeddings]
+        
+        # Note: In production, use Celery or similar for true async; for now, this queues background work
+        import asyncio
+        asyncio.create_task(generate_embeddings_task(article_ids))
+        
+        return {
+            "message": f"Started generating embeddings for {len(article_ids)} articles",
+            "count": len(article_ids)
+        }
+    except Exception as e:
+        logger.error(f"Error triggering embeddings: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+@router.post("/connections/compute")
+async def trigger_compute_connections(
+    threshold: float = Query(0.7, ge=0.0, le=1.0)
+):
+    """
+    Trigger semantic connection computation between articles based on embeddings.
+    
+    - **threshold**: Similarity threshold for connections (0.0-1.0, default 0.7)
+    
+    Returns immediately; processing happens in the background.
+    """
+    from app.routers.embeddings import compute_connections_task
+    import asyncio
+    
+    try:
+        asyncio.create_task(compute_connections_task(threshold))
+        return {
+            "message": f"Started computing connections with threshold {threshold}",
+            "threshold": threshold
+        }
+    except Exception as e:
+        logger.error(f"Error triggering connections: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+

@@ -161,8 +161,36 @@ export default function ArticlesPage() {
         </form>
         <div className="mt-3 space-y-2">
           {ingestResult && (
-            <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2">
-              {ingestResult.message} ({ingestResult.articles_created} new, {ingestResult.articles_updated} skipped)
+            <div>
+              <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2 mb-2">
+                {ingestResult.message} ({ingestResult.articles_created} new, {ingestResult.articles_updated} skipped)
+              </div>
+              {ingestResult.articles_created > 0 && (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => runTopicIngest()}
+                    disabled={isIngesting}
+                    className="text-xs px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    Re-run
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => ingestionApi.triggerEmbeddings().then(() => alert('Embedding generation started in background')).catch(e => alert(`Error: ${e.message}`))}
+                    className="text-xs px-3 py-1 bg-purple-600 text-white rounded hover:bg-purple-700"
+                  >
+                    Generate Embeddings
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => ingestionApi.triggerConnections().then(() => alert('Connection computation started in background')).catch(e => alert(`Error: ${e.message}`))}
+                    className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Compute Connections
+                  </button>
+                </div>
+              )}
             </div>
           )}
           {ingestError instanceof Error && (
