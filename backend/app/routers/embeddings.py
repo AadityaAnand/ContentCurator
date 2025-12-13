@@ -34,8 +34,9 @@ async def generate_embedding(
         return {"message": "Embedding already exists", "article_id": article_id}
     
     try:
-        # Generate embedding from article content
-        text_to_embed = f"{article.title}\n\n{article.content or ''}"
+        # Generate embedding from article content (truncate to avoid Ollama errors)
+        content_preview = article.content[:2000] if article.content else ''
+        text_to_embed = f"{article.title}\n\n{content_preview}"
         embedding_vector = await ollama_service.generate_embedding(text_to_embed)
         
         # Store embedding (as TEXT since pgvector not available)
@@ -98,8 +99,9 @@ async def generate_embeddings_task(article_ids: List[int]):
                 if existing:
                     continue
                 
-                # Generate embedding
-                text_to_embed = f"{article.title}\n\n{article.content or ''}"
+                # Generate embedding (truncate content to avoid Ollama errors)
+                content_preview = article.content[:2000] if article.content else ''
+                text_to_embed = f"{article.title}\n\n{content_preview}"
                 embedding_vector = await ollama_service.generate_embedding(text_to_embed)
                 
                 # Store embedding
