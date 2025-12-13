@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { BookOpen, Search, TrendingUp, User, LogOut } from 'lucide-react'
+import { BookOpen, Search, TrendingUp, User, LogOut, Plus } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 
 export function Navigation() {
@@ -25,6 +25,13 @@ export function Navigation() {
               >
                 <Search className="h-4 w-4 mr-1" />
                 Articles
+              </Link>
+              <Link
+                href="/ingest"
+                className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Ingest
               </Link>
               <Link
                 href="/graph"
