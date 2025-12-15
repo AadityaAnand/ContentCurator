@@ -78,32 +78,21 @@ async def ingest_youtube_video(
 @router.post("/topic", response_model=IngestionResponse)
 async def ingest_topic(
     topic: TopicIngest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
-    Ingest articles for an arbitrary topic using a web search API (async).
+    Ingest articles for an arbitrary topic using a web search API.
 
     - **query**: Topic or keyword to search
     - **max_results**: Number of search results to process (1-15)
 
-    The endpoint will queue the ingestion as a background task and return immediately.
-    The ingestion process will search the web (Tavily), fetch each page, summarize with Ollama,
+    The endpoint will search the web (Tavily), fetch each page, summarize with Ollama,
     auto-categorize, and store results. Requires `TAVILY_API_KEY` in settings.
-    
-    Note: This is now async and won't block. Check the /api/articles endpoint later to see results.
     """
     try:
-        logger.info(f"Queuing topic search for: {topic.query}")
-        # Add to background tasks instead of awaiting
-        background_tasks.add_task(topic_ingestion_service.ingest_topic, topic, db)
-        return {
-            "status": "queued",
-            "message": f"Topic ingestion for '{topic.query}' has been queued. Results will appear shortly.",
-            "articles_created": 0,
-            "articles_processed": 0,
-            "errors": []
-        }
+        logger.info(f"Ingesting topic search for: {topic.query}")
+        result = await topic_ingestion_service.ingest_topic(topic, db)
+        return result
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -113,5 +102,5 @@ async def ingest_topic(
         logger.error(f"Error in topic ingestion endpoint: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to queue topic ingestion: {str(e)}"
+            detail=f"Failed to ingest topic: {str(e)}"
         )
