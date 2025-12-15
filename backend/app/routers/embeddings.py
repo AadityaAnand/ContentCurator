@@ -331,3 +331,76 @@ async def get_embedding_stats(db: Session = Depends(get_db)):
         "total_connections": total_connections,
         "avg_connections_per_article": round(total_connections * 2 / max(articles_with_embeddings, 1), 2)
     }
+
+
+@router.get("/graph")
+async def get_knowledge_graph(
+    min_similarity: float = 0.5,
+    limit: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get knowledge graph data optimized for visualization.
+    Returns nodes (articles) and edges (connections) in a format ready for graph rendering.
+    """
+    # Get articles with embeddings (only these can have connections)
+    articles_query = db.query(Article).join(Embedding, Article.id == Embedding.article_id)
+    
+    if limit:
+        articles_query = articles_query.limit(limit)
+    
+    articles = articles_query.all()
+    
+    if not articles:
+        return {"nodes": [], "edges": [], "stats": {"node_count": 0, "edge_count": 0}}
+    
+    article_ids = [a.id for a in articles]
+    
+    # Get connections between these articles
+    connections = db.query(Connection).filter(
+        Connection.source_article_id.in_(article_ids),
+        Connection.target_article_id.in_(article_ids),
+        Connection.similarity_score >= min_similarity
+    ).all()
+    
+    # Build nodes with metadata
+    nodes = []
+    for article in articles:
+        # Count connections for this node
+        connection_count = sum(1 for c in connections if c.source_article_id == article.id or c.target_article_id == article.id)
+        
+        nodes.append({
+            "id": article.id,
+            "title": article.title,
+            "url": article.url,
+            "source_type": article.source_type,
+            "published_at": article.published_at.isoformat() if article.published_at else None,
+            "connection_count": connection_count,
+            "content_preview": article.content[:200] if article.content else ""
+        })
+    
+    # Build edges
+    edges = []
+    seen_pairs = set()
+    for conn in connections:
+        # Avoid duplicate edges (A-B and B-A)
+        pair = tuple(sorted([conn.source_article_id, conn.target_article_id]))
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            edges.append({
+                "source": conn.source_article_id,
+                "target": conn.target_article_id,
+                "similarity": round(conn.similarity_score, 3),
+                "type": conn.connection_type or "semantic"
+            })
+    
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "stats": {
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "avg_connections": round(len(edges) * 2 / len(nodes), 2) if nodes else 0,
+            "min_similarity": min_similarity
+        }
+    }

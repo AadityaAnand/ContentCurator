@@ -68,59 +68,22 @@ export default function GraphPage() {
   const [viewMode, setViewMode] = useState<'force' | 'radial' | 'hierarchical'>('force')
   const [showInfo, setShowInfo] = useState(true)
 
-  // Fetch articles
-  const { data: articles, isLoading: articlesLoading } = useQuery({
-    queryKey: ['articles-all'],
-    queryFn: async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
-      const response = await fetch(`${apiUrl}/api/articles?page=1&page_size=100`)
-      if (!response.ok) throw new Error('Failed to fetch articles')
-      const data = await response.json()
-      return data.items || []
-    },
-  })
 
-  // Fetch connections using the related endpoint
+
+  // Fetch graph data using optimized endpoint
   const { data: graphData, isLoading: connectionsLoading } = useQuery({
-    queryKey: ['graph-connections', articles?.length],
+    queryKey: ['graph-data'],
     queryFn: async () => {
-      if (!articles || articles.length === 0) return { nodes: [], links: [] }
-
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
-      const links: Set<string> = new Set()
-      const connections: GraphLink[] = []
-
-      // Fetch related articles for each article
-      for (const article of articles) {
-        try {
-          const response = await fetch(`${apiUrl}/api/embeddings/related/${article.id}?limit=3`)
-          if (response.ok) {
-            const related = await response.json()
-            related.forEach((rel: any) => {
-              const key = [Math.min(article.id, rel.id), Math.max(article.id, rel.id)].join('-')
-              if (!links.has(key)) {
-                links.add(key)
-                connections.push({
-                  source: article.id,
-                  target: rel.id,
-                  strength: rel.similarity_score || 0.5,
-                })
-              }
-            })
-          }
-        } catch (err) {
-          console.error(`Failed to fetch relations for article ${article.id}:`, err)
-        }
+      const response = await fetch(`${apiUrl}/api/embeddings/graph?min_similarity=0.5&limit=100`)
+      if (!response.ok) throw new Error('Failed to fetch graph data')
+      const data = await response.json()
+      
+      return {
+        nodes: data.nodes.map((n: any) => ({ id: n.id, title: n.title })),
+        links: data.edges.map((e: any) => ({ source: e.source, target: e.target, strength: e.similarity }))
       }
-
-      const nodes: GraphNode[] = articles.map((a: Article) => ({
-        id: a.id,
-        title: a.title,
-      }))
-
-      return { nodes, links: connections }
     },
-    enabled: !!articles && articles.length > 0,
   })
 
   // Initialize D3 graph
@@ -345,7 +308,7 @@ export default function GraphPage() {
     }
   }
 
-  const isLoading = articlesLoading || connectionsLoading
+  const isLoading = connectionsLoading
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
