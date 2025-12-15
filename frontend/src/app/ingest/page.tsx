@@ -160,29 +160,19 @@ export default function IngestPage() {
 
           {/* Success/Error Messages */}
           {topicMutation.isSuccess && (
-            <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-1">
-                    Successfully ingested articles!
+                  <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                    ✓ Ingestion queued!
                   </h3>
-                  <p className="text-sm text-green-800 dark:text-green-200">
-                    Created: {topicMutation.data?.articles_created || 0} • 
-                    Processed: {topicMutation.data?.articles_processed || 0}
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    {topicMutation.data?.message || 'Processing in the background. Check /articles page in 30-60 seconds.'}
                   </p>
-                  {topicMutation.data?.errors && topicMutation.data.errors.length > 0 && (
-                    <details className="mt-2">
-                      <summary className="text-xs text-green-700 dark:text-green-300 cursor-pointer">
-                        View errors ({topicMutation.data.errors.length})
-                      </summary>
-                      <ul className="mt-2 text-xs text-green-700 dark:text-green-300 space-y-1 list-disc list-inside">
-                        {topicMutation.data.errors.map((error, i) => (
-                          <li key={i}>{error}</li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                    The ingestion is running in the background. Refresh the /articles page in a moment to see new articles.
+                  </p>
                 </div>
               </div>
             </div>
