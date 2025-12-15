@@ -71,7 +71,7 @@ export default function GraphPage() {
 
 
   // Fetch graph data using optimized endpoint
-  const { data: graphData, isLoading: connectionsLoading } = useQuery({
+  const { data: graphData, isLoading: connectionsLoading, error: graphError } = useQuery({
     queryKey: ['graph-data'],
     queryFn: async () => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
@@ -84,6 +84,7 @@ export default function GraphPage() {
         links: data.edges.map((e: any) => ({ source: e.source, target: e.target, strength: e.similarity }))
       }
     },
+    retry: 2,
   })
 
   // Initialize D3 graph
@@ -402,6 +403,34 @@ export default function GraphPage() {
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
               <p className="text-gray-700 dark:text-gray-300">Loading graph data...</p>
+            </div>
+          </div>
+        )}
+
+        {graphError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3 text-center max-w-sm">
+              <p className="text-red-600 dark:text-red-400 font-semibold">Failed to load graph</p>
+              <p className="text-gray-700 dark:text-gray-300 text-sm">
+                Make sure you have articles with embeddings. Visit the Ingest page to add content.
+              </p>
+              <a href="/ingest" className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">
+                Go to Ingest
+              </a>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !graphError && graphData && graphData.nodes.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3 text-center max-w-sm">
+              <p className="text-gray-700 dark:text-gray-300 font-semibold">No graph data available</p>
+              <p className="text-gray-600 dark:text-gray-400 text-sm">
+                You need articles with embeddings to see the knowledge graph. Start by ingesting content.
+              </p>
+              <a href="/ingest" className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">
+                Add Content
+              </a>
             </div>
           </div>
         )}

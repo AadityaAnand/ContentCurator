@@ -58,6 +58,15 @@ export default function TrendsPage() {
           <div className="flex justify-center items-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
           </div>
+        ) : !stats || stats.total_articles === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Database className="h-16 w-16 text-gray-300 dark:text-gray-700 mb-4" />
+            <p className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">No data to analyze yet</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">Start by ingesting articles to see trends and analytics.</p>
+            <a href="/ingest" className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+              Go to Ingest
+            </a>
+          </div>
         ) : (
           <>
             {/* Stats Cards */}
