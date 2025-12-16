@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { BookOpen, Search, TrendingUp, Layers, Sparkles, Network, Lightbulb } from 'lucide-react'
+import { BookOpen, Search, TrendingUp, Layers, Sparkles, Network, Lightbulb, HelpCircle } from 'lucide-react'
 
 export default function HomePage() {
   return (
@@ -39,6 +39,26 @@ export default function HomePage() {
           >
             Begin Journey
           </Link>
+        </div>
+      </div>
+
+      {/* Quick Start Banner */}
+      <div className="bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border-2 border-blue-500/50 rounded-xl p-6 mb-12 backdrop-blur-sm">
+        <div className="flex items-start gap-4">
+          <HelpCircle className="h-8 w-8 text-blue-400 flex-shrink-0 mt-1" />
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-blue-300 mb-2">New to Jnana?</h2>
+            <p className="text-blue-100 mb-4">
+              Learn how to build your AI-powered knowledge library in just 4 simple steps. Our guide walks you through ingesting content, generating embeddings, computing connections, and exploring your knowledge graph.
+            </p>
+            <Link
+              href="/how-to-use"
+              className="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <HelpCircle className="h-5 w-5" />
+              View Complete Guide
+            </Link>
+          </div>
         </div>
       </div>
 
