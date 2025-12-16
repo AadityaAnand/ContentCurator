@@ -58,7 +58,7 @@ class CategoryResponse(CategoryBase):
 class SummaryBase(BaseModel):
     executive_summary: str
     full_summary: str
-    key_points: List[str] = Field(..., min_length=1, max_length=10)
+    key_points: List[str] = Field(default_factory=list, max_length=10)
 
 
 class SummaryCreate(SummaryBase):

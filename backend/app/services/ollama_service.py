@@ -152,10 +152,13 @@ Key Points:"""
                 if point:
                     points.append(point)
         
-        # Ensure we have 5-7 points
-        if len(points) < 5:
+        # Ensure we have at least one point
+        if len(points) == 0:
+            logger.warning("No key points extracted, using default")
+            points = ["Summary not available"]
+        elif len(points) < 5:
             logger.warning(f"Only extracted {len(points)} key points, expected 5-7")
-        
+
         return points[:7]  # Limit to 7
     
     async def categorize_content(self, title: str, content: str) -> List[str]:
