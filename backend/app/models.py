@@ -169,3 +169,27 @@ class Trend(Base):
     period_end = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class Job(Base):
+    """Track background jobs for async operations"""
+    __tablename__ = "jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_type = Column(String(50), nullable=False, index=True)  # 'topic_ingestion', 'embedding_generation', etc.
+    status = Column(String(20), nullable=False, index=True, default='pending')  # 'pending', 'running', 'completed', 'failed'
+    progress = Column(Integer, default=0)  # 0-100 percentage
+    total_items = Column(Integer, default=0)
+    processed_items = Column(Integer, default=0)
+    created_items = Column(Integer, default=0)
+
+    # Job parameters and results
+    parameters = Column(JSON)  # Input parameters for the job
+    result = Column(JSON)  # Final result data
+    error_message = Column(Text)  # Error details if failed
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    started_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

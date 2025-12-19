@@ -316,3 +316,42 @@ class TrendDetail(TrendResponse):
 class TrendListResponse(BaseModel):
     items: List[TrendResponse]
     total: int
+
+
+# ============================================================================
+# Job Schemas (Background Task Tracking)
+# ============================================================================
+
+class JobResponse(BaseModel):
+    id: int
+    job_type: str
+    status: str
+    progress: int
+    total_items: int
+    processed_items: int
+    created_items: int
+    parameters: Optional[Dict[str, Any]] = None
+    result: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobCreate(BaseModel):
+    job_type: str
+    parameters: Dict[str, Any]
+
+
+class JobStatusResponse(BaseModel):
+    id: int
+    status: str
+    progress: int
+    total_items: int
+    processed_items: int
+    created_items: int
+    error_message: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
