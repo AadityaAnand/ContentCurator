@@ -134,6 +134,21 @@ class TopicIngest(BaseModel):
     source_name: Optional[str] = None
 
 
+class ResearchRequest(BaseModel):
+    query: str = Field(..., min_length=2, max_length=200)
+    max_web_results: int = Field(default=5, ge=1, le=15)
+    max_youtube_results: int = Field(default=3, ge=0, le=10)
+
+
+class ResearchResponse(BaseModel):
+    success: bool
+    query: str
+    web_articles_created: int
+    youtube_videos_created: int
+    total_articles_created: int
+    errors: List[str] = []
+
+
 class IngestionResponse(BaseModel):
     success: bool
     message: str

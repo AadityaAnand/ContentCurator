@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import ingestion, articles, embeddings, auth, saved_articles, trends, jobs
+from app.routers import ingestion, articles, embeddings, auth, saved_articles, trends, jobs, research
 import logging
 
 # Configure logging
@@ -34,6 +34,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(saved_articles.router)
 app.include_router(ingestion.router, prefix=settings.API_V1_PREFIX)
+app.include_router(research.router, prefix=settings.API_V1_PREFIX)
 app.include_router(articles.router, prefix=settings.API_V1_PREFIX)
 app.include_router(embeddings.router, prefix=f"{settings.API_V1_PREFIX}/embeddings", tags=["embeddings"])
 app.include_router(trends.router, prefix=settings.API_V1_PREFIX)

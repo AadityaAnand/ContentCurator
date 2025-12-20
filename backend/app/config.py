@@ -19,9 +19,10 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = "llama3.2"
     OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
 
-    # Search API (for topic ingestion)
+    # Search APIs
     TAVILY_API_KEY: Optional[str] = None
-    
+    YOUTUBE_API_KEY: Optional[str] = None
+
     # Security
     SECRET_KEY: str = "dev_secret_key_change_in_production"
     JWT_SECRET_KEY: str = "jwt_dev_secret_key"

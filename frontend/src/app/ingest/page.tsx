@@ -3,13 +3,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ingestionApi, jobsApi } from '@/lib/api';
-import { Loader2, Plus, Search, AlertCircle, CheckCircle2, Sparkles, Database, Clock } from 'lucide-react';
+import { Loader2, Search, AlertCircle, CheckCircle2, Clock, Youtube, Globe, Sparkles } from 'lucide-react';
 import type { JobStatusResponse } from '@/types';
 
 export default function IngestPage() {
-  const [topicQuery, setTopicQuery] = useState('');
-  const [topicMaxResults, setTopicMaxResults] = useState(3);
-  const [topicSourceName, setTopicSourceName] = useState('Web Search');
+  // Research state
+  const [researchQuery, setResearchQuery] = useState('');
+  const [maxWebResults, setMaxWebResults] = useState(5);
+  const [maxYoutubeResults, setMaxYoutubeResults] = useState(3);
+
   const [currentJob, setCurrentJob] = useState<JobStatusResponse | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -41,9 +43,7 @@ export default function IngestPage() {
   // Start polling when job is created
   const startPolling = (jobId: number) => {
     setIsPolling(true);
-    // Poll immediately
     pollJobStatus(jobId);
-    // Then poll every 2 seconds
     pollingIntervalRef.current = setInterval(() => {
       pollJobStatus(jobId);
     }, 2000);
@@ -58,34 +58,22 @@ export default function IngestPage() {
     };
   }, []);
 
-  const topicMutation = useMutation({
-    mutationFn: (payload: { query: string; max_results: number; source_name: string }) =>
-      ingestionApi.ingestTopicAsync(payload.query, payload.max_results, payload.source_name),
+  const researchMutation = useMutation({
+    mutationFn: (payload: { query: string; max_web_results: number; max_youtube_results: number }) =>
+      ingestionApi.researchTopic(payload.query, payload.max_web_results, payload.max_youtube_results),
     onSuccess: (data) => {
-      // Start polling for job status
       startPolling(data.id);
-      setTopicQuery('');
+      setResearchQuery('');
     },
   });
 
-  const embeddingsMutation = useMutation({
-    mutationFn: () => ingestionApi.triggerEmbeddings(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
-    },
-  });
-
-  const connectionsMutation = useMutation({
-    mutationFn: (threshold: number) => ingestionApi.triggerConnections(threshold),
-  });
-
-  const handleTopicIngest = (e: React.FormEvent) => {
+  const handleResearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (topicQuery.trim()) {
-      topicMutation.mutate({
-        query: topicQuery,
-        max_results: topicMaxResults,
-        source_name: topicSourceName,
+    if (researchQuery.trim()) {
+      researchMutation.mutate({
+        query: researchQuery,
+        max_web_results: maxWebResults,
+        max_youtube_results: maxYoutubeResults,
       });
     }
   };
@@ -97,109 +85,140 @@ export default function IngestPage() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-              <Plus className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+              <Sparkles className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                Ingest New Content
+                Research a Topic
               </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Discover and add new articles from the web to your knowledge library
+                Let AI search the web and YouTube, then curate the best content for you
               </p>
             </div>
           </div>
 
           {/* Info Card */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <div className="flex gap-3">
               <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-blue-900 dark:text-blue-100">
-                <p className="font-semibold mb-1">How it works:</p>
-                <ol className="list-decimal list-inside space-y-1 text-blue-800 dark:text-blue-200">
-                  <li>Enter a topic and we'll search the web using Tavily API</li>
-                  <li>Articles are downloaded, cleaned, and summarized by Ollama AI</li>
-                  <li>Content is permanently stored in your knowledge library</li>
-                  <li>Generate embeddings and connections to integrate with existing articles</li>
-                </ol>
+                <p className="font-semibold mb-2">How Autonomous Research Works:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-blue-800 dark:text-blue-200">
+                  <div className="flex items-start gap-2">
+                    <Globe className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Web Articles</p>
+                      <p className="text-xs">Searches Tavily API for relevant articles</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Youtube className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">YouTube Videos</p>
+                      <p className="text-xs">Finds educational videos with transcripts</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">AI Processing</p>
+                      <p className="text-xs">Ollama summarizes and categorizes everything</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium">Auto-Integration</p>
+                      <p className="text-xs">Generates embeddings and connections automatically</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Topic Ingestion Form */}
+        {/* Research Form */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
             <Search className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-            Search Web for Topic
+            What do you want to learn about?
           </h2>
 
-          <form onSubmit={handleTopicIngest} className="space-y-4">
+          <form onSubmit={handleResearch} className="space-y-6">
             <div>
-              <label htmlFor="topic-query" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Topic or Keywords
+              <label htmlFor="research-query" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Research Topic
               </label>
               <input
-                id="topic-query"
+                id="research-query"
                 type="text"
-                value={topicQuery}
-                onChange={(e) => setTopicQuery(e.target.value)}
-                placeholder="e.g., 'artificial intelligence in healthcare'"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-                disabled={topicMutation.isPending}
+                value={researchQuery}
+                onChange={(e) => setResearchQuery(e.target.value)}
+                placeholder="e.g., 'quantum computing applications' or 'sustainable energy solutions'"
+                className="w-full px-4 py-3 text-lg border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                disabled={researchMutation.isPending || isPolling}
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="max-results" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Number of Articles: {topicMaxResults}
+                <label htmlFor="max-web" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  Web Articles: {maxWebResults}
                 </label>
                 <input
-                  id="max-results"
+                  id="max-web"
                   type="range"
                   min="1"
-                  max="10"
-                  value={topicMaxResults}
-                  onChange={(e) => setTopicMaxResults(Number(e.target.value))}
+                  max="15"
+                  value={maxWebResults}
+                  onChange={(e) => setMaxWebResults(Number(e.target.value))}
                   className="w-full"
-                  disabled={topicMutation.isPending}
+                  disabled={researchMutation.isPending || isPolling}
                 />
                 <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
                   <span>1</span>
-                  <span>10</span>
+                  <span>15</span>
                 </div>
               </div>
 
               <div>
-                <label htmlFor="source-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Source Label
+                <label htmlFor="max-youtube" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                  <Youtube className="h-4 w-4" />
+                  YouTube Videos: {maxYoutubeResults}
                 </label>
                 <input
-                  id="source-name"
-                  type="text"
-                  value={topicSourceName}
-                  onChange={(e) => setTopicSourceName(e.target.value)}
-                  placeholder="e.g., 'Web Search'"
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  disabled={topicMutation.isPending}
+                  id="max-youtube"
+                  type="range"
+                  min="0"
+                  max="10"
+                  value={maxYoutubeResults}
+                  onChange={(e) => setMaxYoutubeResults(Number(e.target.value))}
+                  className="w-full"
+                  disabled={researchMutation.isPending || isPolling}
                 />
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <span>0</span>
+                  <span>10</span>
+                </div>
               </div>
             </div>
 
             <button
               type="submit"
-              disabled={!topicQuery.trim() || topicMutation.isPending || isPolling}
-              className="w-full px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              disabled={!researchQuery.trim() || researchMutation.isPending || isPolling}
+              className="w-full px-6 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold text-lg rounded-lg hover:from-indigo-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-300 dark:disabled:from-gray-700 dark:disabled:to-gray-700 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 shadow-lg"
             >
-              {topicMutation.isPending || isPolling ? (
+              {researchMutation.isPending || isPolling ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  {isPolling ? 'Processing...' : 'Starting...'}
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  {isPolling ? 'Researching...' : 'Starting Research...'}
                 </>
               ) : (
                 <>
-                  <Plus className="h-5 w-5" />
-                  Ingest Articles
+                  <Sparkles className="h-6 w-6" />
+                  Start Research
                 </>
               )}
             </button>
@@ -207,7 +226,7 @@ export default function IngestPage() {
 
           {/* Job Progress */}
           {currentJob && (
-            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <div className="flex items-start gap-3">
                 {currentJob.status === 'completed' ? (
                   <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
@@ -218,35 +237,62 @@ export default function IngestPage() {
                 )}
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                    {currentJob.status === 'completed' && '✓ Ingestion Complete!'}
-                    {currentJob.status === 'failed' && '✗ Ingestion Failed'}
-                    {currentJob.status === 'running' && 'Processing Articles...'}
+                    {currentJob.status === 'completed' && '✓ Research Complete!'}
+                    {currentJob.status === 'failed' && '✗ Research Failed'}
+                    {currentJob.status === 'running' && 'Research in Progress...'}
                     {currentJob.status === 'pending' && 'Queued for Processing...'}
                   </h3>
 
                   {/* Progress Bar */}
                   {currentJob.status === 'running' && (
                     <div className="mb-3">
-                      <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                      <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2.5">
                         <div
-                          className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all duration-500"
+                          className="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 h-2.5 rounded-full transition-all duration-500"
                           style={{ width: `${currentJob.progress}%` }}
                         />
                       </div>
-                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                        {currentJob.processed_items} of {currentJob.total_items} articles processed
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
+                        {currentJob.progress < 70 && 'Searching and processing content...'}
+                        {currentJob.progress >= 70 && currentJob.progress < 85 && 'Generating embeddings...'}
+                        {currentJob.progress >= 85 && 'Computing connections...'}
                       </p>
                     </div>
                   )}
 
                   {/* Results */}
                   {currentJob.status === 'completed' && currentJob.result && (
-                    <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-                      <p>✓ {currentJob.result.articles_created} new articles added</p>
-                      <p>✓ {currentJob.result.articles_processed} articles processed</p>
-                      {currentJob.result.articles_updated > 0 && (
-                        <p>✓ {currentJob.result.articles_updated} articles updated</p>
-                      )}
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        {currentJob.result.web_articles_created > 0 && (
+                          <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                            <Globe className="h-4 w-4" />
+                            <span>{currentJob.result.web_articles_created} web articles</span>
+                          </div>
+                        )}
+                        {currentJob.result.youtube_videos_created > 0 && (
+                          <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                            <Youtube className="h-4 w-4" />
+                            <span>{currentJob.result.youtube_videos_created} videos</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs text-blue-800 dark:text-blue-200 mt-2">
+                        <p>✓ {currentJob.result.embeddings_generated || 0} embeddings generated</p>
+                        <p>✓ {currentJob.result.connections_computed || 0} connections discovered</p>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
+                        <p className="text-sm text-blue-900 dark:text-blue-100">
+                          Your research is ready! View it in{' '}
+                          <a href="/articles" className="font-semibold underline hover:text-blue-600">
+                            Articles
+                          </a>
+                          {' '}or{' '}
+                          <a href="/graph" className="font-semibold underline hover:text-blue-600">
+                            Knowledge Graph
+                          </a>
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -260,85 +306,22 @@ export default function IngestPage() {
             </div>
           )}
 
-          {topicMutation.isError && (
+          {researchMutation.isError && (
             <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
               <div className="flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-1">
-                    Ingestion failed
+                    Research failed
                   </h3>
                   <p className="text-sm text-red-800 dark:text-red-200">
-                    {topicMutation.error instanceof Error ? topicMutation.error.message : 'Unknown error'}
+                    {researchMutation.error instanceof Error ? researchMutation.error.message : 'Unknown error'}
                   </p>
                 </div>
               </div>
             </div>
           )}
         </div>
-
-        {/* Post-Ingestion Actions */}
-        {currentJob && currentJob.status === 'completed' && (
-          <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Next Steps
-            </h2>
-            
-            <div className="space-y-3">
-              <button
-                onClick={() => embeddingsMutation.mutate()}
-                disabled={embeddingsMutation.isPending}
-                className="w-full px-4 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {embeddingsMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-5 w-5" />
-                    Generate Embeddings
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={() => connectionsMutation.mutate(0.7)}
-                disabled={connectionsMutation.isPending}
-                className="w-full px-4 py-3 bg-amber-600 text-white font-medium rounded-lg hover:bg-amber-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {connectionsMutation.isPending ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Computing...
-                  </>
-                ) : (
-                  <>
-                    <Database className="h-5 w-5" />
-                    Compute Connections
-                  </>
-                )}
-              </button>
-
-              {(embeddingsMutation.isSuccess || connectionsMutation.isSuccess) && (
-                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <p className="text-sm text-blue-900 dark:text-blue-100">
-                    ✓ Processing started in background. Visit{' '}
-                    <a href="/articles" className="font-semibold underline">
-                      Articles
-                    </a>
-                    {' '}or{' '}
-                    <a href="/graph" className="font-semibold underline">
-                      Knowledge Graph
-                    </a>
-                    {' '}to see results.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
