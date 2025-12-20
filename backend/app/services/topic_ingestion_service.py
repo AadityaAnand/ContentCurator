@@ -1,6 +1,7 @@
 import logging
 import re
-from typing import List, Dict
+import asyncio
+from typing import List, Dict, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -13,6 +14,11 @@ from app.services.ollama_service import ollama_service
 
 logger = logging.getLogger(__name__)
 
+# Retry configuration
+MAX_RETRIES = 3
+INITIAL_RETRY_DELAY = 1.0  # seconds
+MAX_RETRY_DELAY = 10.0  # seconds
+
 
 class TopicIngestionService:
     """Search the web for a topic, summarize, and store articles."""
@@ -20,6 +26,51 @@ class TopicIngestionService:
     def __init__(self) -> None:
         self.search_endpoint = "https://api.tavily.com/search"
         self.http_timeout = 15.0
+
+    async def _retry_with_backoff(self, func, *args, operation_name: str = "operation", **kwargs):
+        """
+        Retry a function with exponential backoff.
+
+        Retries on:
+        - Network errors (ConnectError, TimeoutError)
+        - Rate limits (429 status)
+        - Server errors (5xx status)
+        """
+        last_exception = None
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                return await func(*args, **kwargs)
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadTimeout) as e:
+                last_exception = e
+                if attempt < MAX_RETRIES - 1:
+                    delay = min(INITIAL_RETRY_DELAY * (2 ** attempt), MAX_RETRY_DELAY)
+                    logger.warning(f"{operation_name} failed (attempt {attempt + 1}/{MAX_RETRIES}): {type(e).__name__}. Retrying in {delay}s...")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(f"{operation_name} failed after {MAX_RETRIES} attempts: {e}")
+            except httpx.HTTPStatusError as e:
+                status_code = e.response.status_code
+                # Retry on rate limits and server errors
+                if status_code in (429, 500, 502, 503, 504):
+                    last_exception = e
+                    if attempt < MAX_RETRIES - 1:
+                        delay = min(INITIAL_RETRY_DELAY * (2 ** attempt), MAX_RETRY_DELAY)
+                        logger.warning(f"{operation_name} failed with {status_code} (attempt {attempt + 1}/{MAX_RETRIES}). Retrying in {delay}s...")
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.error(f"{operation_name} failed after {MAX_RETRIES} attempts with status {status_code}")
+                else:
+                    # Don't retry on client errors (4xx except 429)
+                    raise
+            except Exception as e:
+                # Don't retry on unexpected exceptions
+                logger.error(f"{operation_name} failed with unexpected error: {e}")
+                raise
+
+        # If we exhausted all retries, raise the last exception
+        if last_exception:
+            raise last_exception
 
     async def ingest_topic(self, payload: TopicIngest, db: Session) -> IngestionResponse:
         if not settings.TAVILY_API_KEY:
@@ -120,25 +171,39 @@ class TopicIngestionService:
             )
 
     async def _search_web(self, query: str, max_results: int) -> List[Dict[str, str]]:
-        payload = {
-            "api_key": settings.TAVILY_API_KEY,
-            "query": query,
-            "max_results": max_results,
-            "search_depth": "basic",
-            "include_answer": False,
-        }
-        async with httpx.AsyncClient(timeout=self.http_timeout) as client:
-            resp = await client.post(self.search_endpoint, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("results", [])
+        """Search the web with retry logic."""
+        async def _do_search():
+            payload = {
+                "api_key": settings.TAVILY_API_KEY,
+                "query": query,
+                "max_results": max_results,
+                "search_depth": "basic",
+                "include_answer": False,
+            }
+            async with httpx.AsyncClient(timeout=self.http_timeout) as client:
+                resp = await client.post(self.search_endpoint, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                return data.get("results", [])
+
+        return await self._retry_with_backoff(
+            _do_search,
+            operation_name=f"Web search for '{query}'"
+        )
 
     async def _fetch_content(self, url: str) -> str:
-        async with httpx.AsyncClient(timeout=self.http_timeout) as client:
-            resp = await client.get(url, follow_redirects=True)
-            resp.raise_for_status()
-            html = resp.text
-            return self._strip_html(html)
+        """Fetch content from URL with retry logic."""
+        async def _do_fetch():
+            async with httpx.AsyncClient(timeout=self.http_timeout) as client:
+                resp = await client.get(url, follow_redirects=True)
+                resp.raise_for_status()
+                html = resp.text
+                return self._strip_html(html)
+
+        return await self._retry_with_backoff(
+            _do_fetch,
+            operation_name=f"Fetch content from {url}"
+        )
 
     def _strip_html(self, html: str) -> str:
         cleaned = re.sub(r"(?is)<(script|style).*?>.*?</\\1>", " ", html)

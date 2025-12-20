@@ -63,3 +63,31 @@ export interface SearchParams {
   page?: number
   page_size?: number
 }
+
+export interface JobResponse {
+  id: number
+  job_type: string
+  status: string
+  progress: number
+  total_items: number
+  processed_items: number
+  created_items: number
+  parameters?: Record<string, any>
+  result?: Record<string, any>
+  error_message?: string
+  created_at: string
+  started_at?: string
+  completed_at?: string
+  updated_at: string
+}
+
+export interface JobStatusResponse {
+  id: number
+  status: string
+  progress: number
+  total_items: number
+  processed_items: number
+  created_items: number
+  error_message?: string
+  result?: Record<string, any>
+}

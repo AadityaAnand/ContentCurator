@@ -1,22 +1,69 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ingestionApi } from '@/lib/api';
-import { Loader2, Plus, Search, AlertCircle, CheckCircle2, Sparkles, Database } from 'lucide-react';
+import { ingestionApi, jobsApi } from '@/lib/api';
+import { Loader2, Plus, Search, AlertCircle, CheckCircle2, Sparkles, Database, Clock } from 'lucide-react';
+import type { JobStatusResponse } from '@/types';
 
 export default function IngestPage() {
   const [topicQuery, setTopicQuery] = useState('');
   const [topicMaxResults, setTopicMaxResults] = useState(3);
   const [topicSourceName, setTopicSourceName] = useState('Web Search');
-  
+  const [currentJob, setCurrentJob] = useState<JobStatusResponse | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   const queryClient = useQueryClient();
 
+  // Poll job status
+  const pollJobStatus = async (jobId: number) => {
+    try {
+      const status = await jobsApi.getJobStatus(jobId);
+      setCurrentJob(status);
+
+      // If job is complete or failed, stop polling
+      if (status.status === 'completed' || status.status === 'failed') {
+        setIsPolling(false);
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        if (status.status === 'completed') {
+          queryClient.invalidateQueries({ queryKey: ['articles'] });
+        }
+      }
+    } catch (error) {
+      console.error('Error polling job status:', error);
+    }
+  };
+
+  // Start polling when job is created
+  const startPolling = (jobId: number) => {
+    setIsPolling(true);
+    // Poll immediately
+    pollJobStatus(jobId);
+    // Then poll every 2 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      pollJobStatus(jobId);
+    }, 2000);
+  };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
   const topicMutation = useMutation({
-    mutationFn: (payload: { query: string; max_results: number; source_name: string }) => 
-      ingestionApi.ingestTopic(payload.query, payload.max_results, payload.source_name),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
+    mutationFn: (payload: { query: string; max_results: number; source_name: string }) =>
+      ingestionApi.ingestTopicAsync(payload.query, payload.max_results, payload.source_name),
+    onSuccess: (data) => {
+      // Start polling for job status
+      startPolling(data.id);
       setTopicQuery('');
     },
   });
@@ -141,13 +188,13 @@ export default function IngestPage() {
 
             <button
               type="submit"
-              disabled={!topicQuery.trim() || topicMutation.isPending}
+              disabled={!topicQuery.trim() || topicMutation.isPending || isPolling}
               className="w-full px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
-              {topicMutation.isPending ? (
+              {topicMutation.isPending || isPolling ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  Ingesting...
+                  {isPolling ? 'Processing...' : 'Starting...'}
                 </>
               ) : (
                 <>
@@ -158,21 +205,56 @@ export default function IngestPage() {
             </button>
           </form>
 
-          {/* Success/Error Messages */}
-          {topicMutation.isSuccess && (
+          {/* Job Progress */}
+          {currentJob && (
             <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                {currentJob.status === 'completed' ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                ) : currentJob.status === 'failed' ? (
+                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5 animate-pulse" />
+                )}
                 <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                    ✓ Ingestion queued!
+                  <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    {currentJob.status === 'completed' && '✓ Ingestion Complete!'}
+                    {currentJob.status === 'failed' && '✗ Ingestion Failed'}
+                    {currentJob.status === 'running' && 'Processing Articles...'}
+                    {currentJob.status === 'pending' && 'Queued for Processing...'}
                   </h3>
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
-                    {topicMutation.data?.message || 'Processing in the background. Check /articles page in 30-60 seconds.'}
-                  </p>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-2">
-                    The ingestion is running in the background. Refresh the /articles page in a moment to see new articles.
-                  </p>
+
+                  {/* Progress Bar */}
+                  {currentJob.status === 'running' && (
+                    <div className="mb-3">
+                      <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${currentJob.progress}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                        {currentJob.processed_items} of {currentJob.total_items} articles processed
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Results */}
+                  {currentJob.status === 'completed' && currentJob.result && (
+                    <div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                      <p>✓ {currentJob.result.articles_created} new articles added</p>
+                      <p>✓ {currentJob.result.articles_processed} articles processed</p>
+                      {currentJob.result.articles_updated > 0 && (
+                        <p>✓ {currentJob.result.articles_updated} articles updated</p>
+                      )}
+                    </div>
+                  )}
+
+                  {currentJob.status === 'failed' && currentJob.error_message && (
+                    <p className="text-sm text-red-800 dark:text-red-200">
+                      {currentJob.error_message}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -196,7 +278,7 @@ export default function IngestPage() {
         </div>
 
         {/* Post-Ingestion Actions */}
-        {topicMutation.isSuccess && (
+        {currentJob && currentJob.status === 'completed' && (
           <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Next Steps
