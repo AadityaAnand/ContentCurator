@@ -141,17 +141,6 @@ export default function ArticleDetailPage({ params }: { params: Promise<{ id: st
           </div>
         )}
 
-        {/* Full Content (if available) */}
-        {article.content && (
-          <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Full Content</h2>
-            <div className="prose dark:prose-invert max-w-none">
-              <p className="text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                {article.content}
-              </p>
-            </div>
-          </div>
-        )}
       </article>
       {/* Related Articles Section */}
       <div className="mt-8 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
