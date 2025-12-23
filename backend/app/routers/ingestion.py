@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.database import get_db
@@ -7,15 +7,20 @@ from app.schemas import RSSFeedIngest, YouTubeIngest, TopicIngest, IngestionResp
 from app.services.rss_service import rss_ingestion_service
 from app.services.youtube_service import youtube_ingestion_service
 from app.services.topic_ingestion_service import topic_ingestion_service
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 import logging
 
 logger = logging.getLogger(__name__)
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/ingest", tags=["ingestion"])
 
 
 @router.post("/rss", response_model=IngestionResponse)
+@limiter.limit("10/minute")
 async def ingest_rss_feed(
+    request: Request,
     feed_data: RSSFeedIngest,
     db: Session = Depends(get_db)
 ):
@@ -46,7 +51,9 @@ async def ingest_rss_feed(
 
 
 @router.post("/youtube", response_model=IngestionResponse)
+@limiter.limit("10/minute")
 async def ingest_youtube_video(
+    request: Request,
     video_data: YouTubeIngest,
     db: Session = Depends(get_db)
 ):

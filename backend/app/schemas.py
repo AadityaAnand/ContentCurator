@@ -263,10 +263,16 @@ class TokenPayload(BaseModel):
     exp: datetime
 
 
-class UserPreferences(BaseModel):
-    digest_frequency: str = Field(..., pattern=r'^(daily|weekly|none)$')
+class UserPreferencesUpdate(BaseModel):
+    digest_frequency: Optional[str] = Field(None, pattern=r'^(daily|weekly|none)$')
+    email_notifications: Optional[bool] = None
+
+class UserPreferencesResponse(BaseModel):
+    digest_frequency: str
     email_notifications: bool
-    followed_topic_ids: List[int] = []
+    followed_topics: List[CategoryResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============================================================================

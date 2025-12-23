@@ -8,7 +8,7 @@ import type { JobStatusResponse } from '@/types';
 
 export default function IngestPage() {
   // Tab state
-  const [activeTab, setActiveTab] = useState<'research' | 'rss'>('research');
+  const [activeTab, setActiveTab] = useState<'research' | 'rss' | 'youtube'>('research');
 
   // Research state
   const [researchQuery, setResearchQuery] = useState('');
@@ -19,6 +19,10 @@ export default function IngestPage() {
   const [rssUrl, setRssUrl] = useState('');
   const [rssSourceName, setRssSourceName] = useState('');
   const [rssMaxArticles, setRssMaxArticles] = useState(10);
+
+  // YouTube state
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [youtubeSourceName, setYoutubeSourceName] = useState('');
 
   const [currentJob, setCurrentJob] = useState<JobStatusResponse | null>(null);
   const [isPolling, setIsPolling] = useState(false);
@@ -88,6 +92,19 @@ export default function IngestPage() {
     },
   });
 
+  const youtubeMutation = useMutation({
+    mutationFn: async (payload: { url: string; sourceName?: string }) => {
+      const response = await ingestionApi.ingestYouTube(payload.url, payload.sourceName);
+      // YouTube ingestion doesn't return job ID, just sync response
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      return response;
+    },
+    onSuccess: () => {
+      setYoutubeUrl('');
+      setYoutubeSourceName('');
+    },
+  });
+
   const handleResearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (researchQuery.trim()) {
@@ -106,6 +123,16 @@ export default function IngestPage() {
         url: rssUrl,
         sourceName: rssSourceName || undefined,
         maxArticles: rssMaxArticles,
+      });
+    }
+  };
+
+  const handleYoutubeIngest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (youtubeUrl.trim()) {
+      youtubeMutation.mutate({
+        url: youtubeUrl,
+        sourceName: youtubeSourceName || undefined,
       });
     }
   };
@@ -153,6 +180,17 @@ export default function IngestPage() {
               <Rss className="h-4 w-4" />
               RSS Feed
             </button>
+            <button
+              onClick={() => setActiveTab('youtube')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeTab === 'youtube'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Youtube className="h-4 w-4" />
+              YouTube Video
+            </button>
           </div>
 
           {/* Info Card */}
@@ -195,7 +233,7 @@ export default function IngestPage() {
                 </div>
               </div>
             </div>
-          ) : (
+          ) : activeTab === 'rss' ? (
             <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
               <div className="flex gap-3">
                 <Rss className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
@@ -203,6 +241,18 @@ export default function IngestPage() {
                   <p className="font-semibold mb-2">RSS Feed Ingestion:</p>
                   <p className="text-orange-800 dark:text-orange-200">
                     Provide an RSS feed URL and we&apos;ll fetch the latest articles, process them with Ollama AI for summaries and categorization, then add them to your knowledge library.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <div className="flex gap-3">
+                <Youtube className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-red-900 dark:text-red-100">
+                  <p className="font-semibold mb-2">YouTube Video Ingestion:</p>
+                  <p className="text-red-800 dark:text-red-200">
+                    Provide a YouTube video URL and we&apos;ll extract the transcript, process it with Ollama AI for summaries and key insights, then add it to your knowledge library. Note: Only works for videos with available transcripts.
                   </p>
                 </div>
               </div>
@@ -395,7 +445,7 @@ export default function IngestPage() {
             </div>
           )}
         </div>
-        ) : (
+        ) : activeTab === 'rss' ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <Rss className="h-5 w-5 text-orange-600 dark:text-orange-400" />
@@ -511,7 +561,106 @@ export default function IngestPage() {
               </div>
             )}
           </div>
-        )}
+        ) : activeTab === 'youtube' ? (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Youtube className="h-5 w-5 text-red-600 dark:text-red-400" />
+              Ingest YouTube Video
+            </h2>
+
+            <form onSubmit={handleYoutubeIngest} className="space-y-6">
+              <div>
+                <label htmlFor="youtube-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  YouTube Video URL *
+                </label>
+                <input
+                  id="youtube-url"
+                  type="url"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                  disabled={youtubeMutation.isPending}
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="youtube-source-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Source Name (optional)
+                </label>
+                <input
+                  id="youtube-source-name"
+                  type="text"
+                  value={youtubeSourceName}
+                  onChange={(e) => setYoutubeSourceName(e.target.value)}
+                  placeholder="e.g., 'AI Explained' or 'Tech Talks'"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                  disabled={youtubeMutation.isPending}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={!youtubeUrl.trim() || youtubeMutation.isPending}
+                className="w-full px-6 py-4 bg-gradient-to-r from-red-600 to-pink-600 text-white font-semibold text-lg rounded-lg hover:from-red-700 hover:to-pink-700 disabled:from-gray-300 disabled:to-gray-300 dark:disabled:from-gray-700 dark:disabled:to-gray-700 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 shadow-lg"
+              >
+                {youtubeMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    Processing Video...
+                  </>
+                ) : (
+                  <>
+                    <Youtube className="h-6 w-6" />
+                    Ingest YouTube Video
+                  </>
+                )}
+              </button>
+            </form>
+
+            {youtubeMutation.isSuccess && youtubeMutation.data && (
+              <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2">
+                      YouTube Video Ingested Successfully!
+                    </h3>
+                    <div className="text-sm text-green-800 dark:text-green-200 space-y-1">
+                      <p>✓ Video transcript processed and added to your library</p>
+                      <p className="text-xs mt-2">
+                        View it in{' '}
+                        <a href="/articles" className="font-semibold underline hover:text-green-600">
+                          Articles
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {youtubeMutation.isError && (
+              <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-1">
+                      YouTube ingestion failed
+                    </h3>
+                    <p className="text-sm text-red-800 dark:text-red-200">
+                      {youtubeMutation.error instanceof Error ? youtubeMutation.error.message : 'Unknown error'}
+                    </p>
+                    <p className="text-xs text-red-700 dark:text-red-300 mt-2">
+                      Note: This video may not have transcripts available. Only videos with transcripts can be processed.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -1,19 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.database import get_db
 from app.models import Job, Article, Embedding
 from app.schemas import ResearchRequest, JobResponse
 from app.services.research_service import research_service
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 import logging
 
 logger = logging.getLogger(__name__)
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/research", tags=["research"])
 
 
 @router.post("/topic", response_model=JobResponse)
+@limiter.limit("5/minute")
 async def research_topic(
+    http_request: Request,
     request: ResearchRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)

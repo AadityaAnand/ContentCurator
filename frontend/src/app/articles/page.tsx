@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { articlesApi, categoriesApi } from '@/lib/api'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { articlesApi, categoriesApi, embeddingsApi } from '@/lib/api'
 import { ArticleCard } from '@/components/ArticleCard'
 import { Pagination } from '@/components/Pagination'
 import { SearchModeToggle, SemanticSearchResults } from '@/components/SemanticSearch'
-import { Search, Filter, BookOpen, AlertCircle } from 'lucide-react'
+import { Search, Filter, BookOpen, AlertCircle, Brain, Network, Loader2, CheckCircle2 } from 'lucide-react'
 
 export default function ArticlesPage() {
   const [page, setPage] = useState(1)
@@ -17,11 +17,19 @@ export default function ArticlesPage() {
   const [searchMode, setSearchMode] = useState<'text' | 'semantic'>('text')
   const [semanticQuery, setSemanticQuery] = useState('')
   const pageSize = 10
+  const queryClient = useQueryClient()
 
   // Fetch categories
   const { data: categories } = useQuery({
     queryKey: ['categories'],
     queryFn: categoriesApi.list,
+  })
+
+  // Fetch embedding stats
+  const { data: embeddingStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['embeddingStats'],
+    queryFn: embeddingsApi.getStats,
+    refetchInterval: 10000, // Refresh every 10 seconds
   })
 
   // Fetch articles
@@ -38,6 +46,22 @@ export default function ArticlesPage() {
         })
       }
       return articlesApi.list(page, pageSize, selectedCategory, selectedSourceType)
+    },
+  })
+
+  // Generate embeddings mutation
+  const generateEmbeddingsMutation = useMutation({
+    mutationFn: embeddingsApi.generateAll,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['embeddingStats'] })
+    },
+  })
+
+  // Compute connections mutation
+  const computeConnectionsMutation = useMutation({
+    mutationFn: () => embeddingsApi.computeConnections(0.7),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['embeddingStats'] })
     },
   })
 
@@ -82,6 +106,90 @@ export default function ArticlesPage() {
             </p>
           </div>
         </div>
+
+        {/* Knowledge Graph Stats Banner */}
+        {!statsLoading && embeddingStats && (
+          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 flex-1">
+                <div className="flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  <div>
+                    <div className="text-sm font-semibold text-purple-900 dark:text-purple-100">
+                      Embeddings
+                    </div>
+                    <div className="text-xs text-purple-700 dark:text-purple-300">
+                      {embeddingStats.articles_with_embeddings}/{embeddingStats.total_articles} ({Math.round((embeddingStats.articles_with_embeddings / embeddingStats.total_articles) * 100)}%)
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Network className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                  <div>
+                    <div className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">
+                      Connections
+                    </div>
+                    <div className="text-xs text-indigo-700 dark:text-indigo-300">
+                      {embeddingStats.total_connections} discovered
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {embeddingStats.articles_without_embeddings > 0 && (
+                  <button
+                    onClick={() => generateEmbeddingsMutation.mutate()}
+                    disabled={generateEmbeddingsMutation.isPending}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {generateEmbeddingsMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Brain className="h-4 w-4" />
+                        Generate Embeddings ({embeddingStats.articles_without_embeddings})
+                      </>
+                    )}
+                  </button>
+                )}
+                {embeddingStats.articles_with_embeddings > 0 && (
+                  <button
+                    onClick={() => computeConnectionsMutation.mutate()}
+                    disabled={computeConnectionsMutation.isPending}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {computeConnectionsMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Computing...
+                      </>
+                    ) : (
+                      <>
+                        <Network className="h-4 w-4" />
+                        Compute Connections
+                      </>
+                    )}
+                  </button>
+                )}
+                {generateEmbeddingsMutation.isSuccess && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 text-sm rounded-lg">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Started!
+                  </div>
+                )}
+                {computeConnectionsMutation.isSuccess && (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 text-sm rounded-lg">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Computing!
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Info Card */}
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">

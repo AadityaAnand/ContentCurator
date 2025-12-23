@@ -91,3 +91,9 @@ export interface JobStatusResponse {
   error_message?: string
   result?: Record<string, any>
 }
+
+export interface UserPreferences {
+  digest_frequency: string
+  email_notifications: boolean
+  followed_topics: Category[]
+}
