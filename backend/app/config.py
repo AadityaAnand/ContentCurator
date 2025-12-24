@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: Optional[str] = None
+    FRONTEND_URL: str = "http://localhost:3000"
     
     # Pagination
     DEFAULT_PAGE_SIZE: int = 10

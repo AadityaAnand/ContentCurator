@@ -44,15 +44,41 @@ class CategoryBase(BaseModel):
     color: Optional[str] = Field(None, pattern=r'^#[0-9A-Fa-f]{6}$')
 
 
-class CategoryCreate(CategoryBase):
-    pass
-
-
 class CategoryResponse(CategoryBase):
     id: int
     created_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
+
+
+class CategoryCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    color: Optional[str] = Field(None, pattern=r'^#[0-9A-Fa-f]{6}$')
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    color: Optional[str] = Field(None, pattern=r'^#[0-9A-Fa-f]{6}$')
+
+
+class CategoryWithStatsResponse(CategoryResponse):
+    article_count: int = 0
+
+
+class BulkCategoryAssignment(BaseModel):
+    article_ids: List[int] = Field(..., min_length=1)
+    category_ids: List[int] = Field(..., min_length=1)
+    mode: str = Field(..., pattern=r'^(add|replace|remove)$')
+
+
+class BulkCategoryResponse(BaseModel):
+    success: bool
+    updated_count: int
+    mode: str
+    category_ids: List[int]
+    article_ids: List[int]
 
 
 class SummaryBase(BaseModel):
@@ -279,6 +305,11 @@ class UserPreferencesResponse(BaseModel):
 # Digest Schemas
 # ============================================================================
 
+class DigestCreate(BaseModel):
+    digest_type: str = Field(..., pattern=r'^(daily|weekly|custom)$')
+    custom_period_days: Optional[int] = Field(None, ge=1, le=30)
+
+
 class DigestGenerate(BaseModel):
     digest_type: str = Field(..., pattern=r'^(daily|weekly|custom)$')
     custom_start_date: Optional[datetime] = None
@@ -306,6 +337,7 @@ class DigestListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    total_pages: int
 
 
 # ============================================================================
