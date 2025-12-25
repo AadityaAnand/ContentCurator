@@ -336,19 +336,44 @@ async def get_embedding_stats(db: Session = Depends(get_db)):
 @router.get("/graph")
 async def get_knowledge_graph(
     min_similarity: float = 0.5,
-    limit: Optional[int] = None,
+    limit: Optional[int] = 100,
+    offset: int = 0,
+    category_id: Optional[int] = None,
+    cluster: bool = False,
     db: Session = Depends(get_db)
 ):
     """
-    Get knowledge graph data optimized for visualization.
+    Get knowledge graph data optimized for visualization with performance enhancements.
+
+    Args:
+        min_similarity: Minimum similarity score for connections (0.0-1.0)
+        limit: Maximum number of nodes to return (default: 100, max: 500)
+        offset: Offset for pagination
+        category_id: Filter by category ID
+        cluster: Enable clustering for large datasets
+
     Returns nodes (articles) and edges (connections) in a format ready for graph rendering.
     """
+    # Cap limit at 500 for performance
+    limit = min(limit, 500) if limit else 100
+
     # Get articles with embeddings (only these can have connections)
     articles_query = db.query(Article).join(Embedding, Article.id == Embedding.article_id)
-    
-    if limit:
-        articles_query = articles_query.limit(limit)
-    
+
+    # Filter by category if specified
+    if category_id:
+        from app.models import Category
+        articles_query = articles_query.join(Article.categories).filter(Category.id == category_id)
+
+    # Order by most recent for consistent pagination
+    articles_query = articles_query.order_by(Article.created_at.desc())
+
+    # Get total count for pagination
+    total_count = articles_query.count()
+
+    # Apply pagination
+    articles_query = articles_query.offset(offset).limit(limit)
+
     articles = articles_query.all()
     
     if not articles:
@@ -394,9 +419,21 @@ async def get_knowledge_graph(
                 "type": conn.connection_type or "semantic"
             })
     
+    # Apply clustering if requested and dataset is large
+    clusters = None
+    if cluster and len(nodes) > 50:
+        clusters = _compute_clusters(nodes, edges)
+
     return {
         "nodes": nodes,
         "edges": edges,
+        "clusters": clusters,
+        "pagination": {
+            "total": total_count,
+            "limit": limit,
+            "offset": offset,
+            "has_more": (offset + limit) < total_count
+        },
         "stats": {
             "node_count": len(nodes),
             "edge_count": len(edges),
@@ -404,3 +441,62 @@ async def get_knowledge_graph(
             "min_similarity": min_similarity
         }
     }
+
+
+def _compute_clusters(nodes: list, edges: list) -> dict:
+    """
+    Compute clusters using simple community detection based on connections.
+
+    Uses a greedy clustering algorithm to group highly connected nodes.
+
+    Args:
+        nodes: List of node dictionaries
+        edges: List of edge dictionaries
+
+    Returns:
+        Dictionary mapping node IDs to cluster IDs
+    """
+    # Build adjacency map
+    adjacency = {}
+    for node in nodes:
+        adjacency[node["id"]] = set()
+
+    for edge in edges:
+        source = edge["source"]
+        target = edge["target"]
+        adjacency[source].add(target)
+        adjacency[target].add(source)
+
+    # Greedy clustering
+    clusters = {}
+    cluster_id = 0
+    visited = set()
+
+    for node in nodes:
+        node_id = node["id"]
+        if node_id in visited:
+            continue
+
+        # Start new cluster
+        cluster = {node_id}
+        queue = [node_id]
+        visited.add(node_id)
+
+        # BFS to find connected nodes
+        while queue:
+            current = queue.pop(0)
+            neighbors = adjacency.get(current, set())
+
+            for neighbor in neighbors:
+                if neighbor not in visited and neighbor in adjacency:
+                    visited.add(neighbor)
+                    cluster.add(neighbor)
+                    queue.append(neighbor)
+
+        # Assign cluster ID
+        for node_id in cluster:
+            clusters[node_id] = cluster_id
+
+        cluster_id += 1
+
+    return clusters
