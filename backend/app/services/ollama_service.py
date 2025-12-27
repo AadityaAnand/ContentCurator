@@ -160,18 +160,24 @@ class OllamaService:
 
         # If single chunk, process directly
         if len(chunks) == 1:
-            prompt = f"""Summarize the following content in 2-3 concise sentences.
-Focus on the most important information and main takeaway.
+            prompt = f"""Read the article content below and create a brief executive summary.
 
-Content:
+INSTRUCTIONS:
+- Write 2-3 clear, informative sentences
+- Focus on the main topic, key findings, and conclusions
+- Be factual and accurate - extract information directly from the content
+- Do NOT make up information, add speculation, or embellish
+- Use professional, objective language
+
+ARTICLE CONTENT:
 {chunks[0]}
 
-Executive Summary:"""
+EXECUTIVE SUMMARY:"""
 
             return await self.generate_chat_completion(
                 prompt=prompt,
-                system_prompt="You are a skilled content summarizer. Provide clear, concise summaries.",
-                temperature=0.5,
+                system_prompt="You are an expert content analyst. Extract and summarize core information from articles accurately. Never fabricate information - only use what's in the source material.",
+                temperature=0.3,
                 max_tokens=150
             )
 
@@ -179,9 +185,11 @@ Executive Summary:"""
         logger.info(f"Content too long ({len(content)} chars), processing {len(chunks)} chunks")
         chunk_summaries = await asyncio.gather(*[
             self.generate_chat_completion(
-                prompt=f"Summarize this in 1-2 sentences:\n\n{chunk}",
-                system_prompt="You are a skilled content summarizer.",
-                temperature=0.5,
+                prompt=f"""Extract the main points from this content in 1-2 factual sentences. Be accurate and concise:
+
+{chunk}""",
+                system_prompt="You are an expert content analyst. Extract key information accurately without fabrication.",
+                temperature=0.3,
                 max_tokens=100
             )
             for chunk in chunks[:3]  # Limit to first 3 chunks for executive summary
@@ -190,15 +198,15 @@ Executive Summary:"""
         # Combine chunk summaries into final executive summary
         combined = " ".join(chunk_summaries)
         if len(combined) > 500:  # If still too long, re-summarize
-            prompt = f"""Combine these summaries into 2-3 concise sentences:
+            prompt = f"""Combine these summaries into 2-3 clear, factual sentences. Maintain accuracy:
 
 {combined}
 
-Final Executive Summary:"""
+FINAL EXECUTIVE SUMMARY:"""
             return await self.generate_chat_completion(
                 prompt=prompt,
-                system_prompt="You are a skilled content summarizer.",
-                temperature=0.5,
+                system_prompt="You are an expert content analyst. Combine information accurately without adding new details.",
+                temperature=0.3,
                 max_tokens=150
             )
 
@@ -211,18 +219,25 @@ Final Executive Summary:"""
 
         # If single chunk, process directly
         if len(chunks) == 1:
-            prompt = f"""Write a comprehensive summary of the following content in one detailed paragraph (5-7 sentences).
-Include key points, main arguments, and important details.
+            prompt = f"""Read the article content and write a comprehensive summary paragraph.
 
-Content:
+INSTRUCTIONS:
+- Write one detailed paragraph (5-7 sentences)
+- Cover the main topic, key arguments, supporting evidence, and conclusions
+- Include important details, findings, or data mentioned in the article
+- Be factual and accurate - do NOT invent details or add speculation
+- Maintain the article's tone and intent
+- Use clear, professional language
+
+ARTICLE CONTENT:
 {chunks[0]}
 
-Full Summary:"""
+COMPREHENSIVE SUMMARY:"""
 
             return await self.generate_chat_completion(
                 prompt=prompt,
-                system_prompt="You are a skilled content summarizer. Provide thorough, informative summaries.",
-                temperature=0.5,
+                system_prompt="You are an expert content analyst. Provide thorough, accurate summaries based strictly on the source material. Never fabricate details.",
+                temperature=0.3,
                 max_tokens=300
             )
 
@@ -230,9 +245,11 @@ Full Summary:"""
         logger.info(f"Generating full summary for {len(chunks)} chunks")
         chunk_summaries = await asyncio.gather(*[
             self.generate_chat_completion(
-                prompt=f"Provide a detailed summary (2-3 sentences) of this content:\n\n{chunk}",
-                system_prompt="You are a skilled content summarizer.",
-                temperature=0.5,
+                prompt=f"""Summarize this section in 2-3 factual sentences. Include key points and important details:
+
+{chunk}""",
+                system_prompt="You are an expert content analyst. Extract information accurately without adding speculation.",
+                temperature=0.3,
                 max_tokens=200
             )
             for chunk in chunks[:5]  # Limit to first 5 chunks
@@ -241,15 +258,15 @@ Full Summary:"""
         # Combine chunk summaries into cohesive paragraph
         combined = " ".join(chunk_summaries)
         if len(combined) > 1000:  # If too long, condense
-            prompt = f"""Synthesize these summaries into one cohesive paragraph (5-7 sentences):
+            prompt = f"""Combine these section summaries into one cohesive paragraph (5-7 sentences). Maintain all key information accurately:
 
 {combined}
 
-Final Summary:"""
+FINAL COMPREHENSIVE SUMMARY:"""
             return await self.generate_chat_completion(
                 prompt=prompt,
-                system_prompt="You are a skilled content summarizer.",
-                temperature=0.5,
+                system_prompt="You are an expert content analyst. Synthesize information accurately without adding new content.",
+                temperature=0.3,
                 max_tokens=400
             )
 
@@ -262,19 +279,24 @@ Final Summary:"""
 
         # If single chunk, process directly
         if len(chunks) == 1:
-            prompt = f"""Extract 5-7 key points from the following content.
-Format each point as a concise bullet point (one line each).
-Return ONLY the bullet points, one per line, starting with a dash (-).
+            prompt = f"""Read the article and extract 5-7 key points.
 
-Content:
+INSTRUCTIONS:
+- Identify the most important facts, findings, or arguments
+- Each point should be one clear, concise sentence
+- Extract information directly from the content - do NOT make up points
+- Format each point as a bullet starting with a dash (-)
+- Return ONLY the bullet points, nothing else
+
+ARTICLE CONTENT:
 {chunks[0]}
 
-Key Points:"""
+KEY POINTS:"""
 
             response = await self.generate_chat_completion(
                 prompt=prompt,
-                system_prompt="You are a skilled content analyzer. Extract the most important points.",
-                temperature=0.5,
+                system_prompt="You are an expert content analyst. Extract the most important, factual points from articles. Never fabricate information.",
+                temperature=0.3,
                 max_tokens=400
             )
         else:
@@ -282,9 +304,11 @@ Key Points:"""
             logger.info(f"Extracting key points from {len(chunks)} chunks")
             chunk_points = await asyncio.gather(*[
                 self.generate_chat_completion(
-                    prompt=f"Extract 2-3 key points from this content. Return only bullet points starting with '-':\n\n{chunk}",
-                    system_prompt="You are a skilled content analyzer.",
-                    temperature=0.5,
+                    prompt=f"""Extract 2-3 important factual points from this content. Format as bullets with '-'. Be accurate:
+
+{chunk}""",
+                    system_prompt="You are an expert content analyst. Extract factual points accurately.",
+                    temperature=0.3,
                     max_tokens=200
                 )
                 for chunk in chunks[:4]  # Limit to first 4 chunks
@@ -318,23 +342,29 @@ Key Points:"""
         chunks = self._chunk_text(content, max_size=3000)
         content_sample = chunks[0] if chunks else content[:3000]
 
-        prompt = f"""Analyze the following article and assign 1-3 relevant categories/topics.
-Choose from common technology and knowledge categories like: AI, Machine Learning, Programming,
-Web Development, Cybersecurity, Startups, Science, Business, Finance, Health, Education, etc.
+        prompt = f"""Analyze this article and assign 1-3 accurate, specific categories.
 
-Return ONLY the category names, separated by commas, nothing else.
+INSTRUCTIONS:
+- Choose categories that precisely match the article's main topics
+- Use standard category names: Technology, AI, Machine Learning, Programming, Web Development,
+  Cybersecurity, Data Science, Cloud Computing, DevOps, Mobile Development, Blockchain,
+  Startups, Business, Finance, Marketing, Science, Health, Education, Design, etc.
+- Be specific: prefer "Machine Learning" over just "Technology" when applicable
+- Return ONLY category names separated by commas (e.g., "AI, Machine Learning, Data Science")
+- Do NOT include explanations or extra text
 
-Title: {title}
+ARTICLE TITLE:
+{title}
 
-Content:
+ARTICLE CONTENT (excerpt):
 {content_sample}
 
-Categories:"""
+CATEGORIES:"""
 
         response = await self.generate_chat_completion(
             prompt=prompt,
-            system_prompt="You are a content categorization expert.",
-            temperature=0.3,
+            system_prompt="You are an expert content categorization system. Assign accurate, specific categories based on article content. Never guess - use what's actually in the text.",
+            temperature=0.2,
             max_tokens=50
         )
 
