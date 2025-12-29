@@ -74,7 +74,7 @@ export default function GraphPage() {
   const { data: graphData, isLoading: connectionsLoading, error: graphError } = useQuery({
     queryKey: ['graph-data'],
     queryFn: async () => {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
       const response = await fetch(`${apiUrl}/api/embeddings/graph?min_similarity=0.5&limit=100`)
       if (!response.ok) throw new Error('Failed to fetch graph data')
       const data = await response.json()

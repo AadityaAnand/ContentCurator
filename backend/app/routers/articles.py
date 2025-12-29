@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_, desc
 from typing import Optional, List
 from datetime import datetime
@@ -55,9 +55,13 @@ async def list_articles(
         # Get total count
         total = query.count()
         
-        # Apply pagination
+        # Apply pagination with eager loading
         offset = (page - 1) * page_size
-        articles = query.offset(offset).limit(page_size).all()
+        articles = query\
+            .options(joinedload(Article.summary), joinedload(Article.categories))\
+            .offset(offset)\
+            .limit(page_size)\
+            .all()
         
         # Calculate total pages
         total_pages = math.ceil(total / page_size)
@@ -177,8 +181,11 @@ async def get_article(
     - Metadata
     """
     try:
-        article = db.query(Article).filter(Article.id == article_id).first()
-        
+        article = db.query(Article)\
+            .options(joinedload(Article.summary), joinedload(Article.categories))\
+            .filter(Article.id == article_id)\
+            .first()
+
         if not article:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

@@ -107,7 +107,12 @@ class TopicIngestionService:
                         articles_updated += 1
                         continue
 
-                    content = await self._fetch_content(url)
+                    # Use Tavily's pre-extracted content if available, otherwise fetch ourselves
+                    content = result.get("content") or result.get("raw_content")
+                    if not content:
+                        logger.info(f"No pre-extracted content from Tavily for {url}, fetching directly")
+                        content = await self._fetch_content(url)
+
                     if not content or len(content) < 200:
                         errors.append(f"Content too short for {url}; skipped")
                         continue
@@ -206,10 +211,33 @@ class TopicIngestionService:
         )
 
     def _strip_html(self, html: str) -> str:
-        cleaned = re.sub(r"(?is)<(script|style).*?>.*?</\\1>", " ", html)
-        cleaned = re.sub(r"<[^>]+>", " ", cleaned)
-        cleaned = re.sub(r"\s+", " ", cleaned)
-        return cleaned.strip()[:15000]
+        """Extract clean text from HTML using BeautifulSoup."""
+        try:
+            from bs4 import BeautifulSoup
+
+            # Parse HTML
+            soup = BeautifulSoup(html, 'html.parser')
+
+            # Remove script, style, nav, header, footer, and other non-content elements
+            for element in soup(['script', 'style', 'nav', 'header', 'footer', 'aside',
+                                'noscript', 'iframe', 'form', 'button']):
+                element.decompose()
+
+            # Get text content
+            text = soup.get_text(separator=' ', strip=True)
+
+            # Clean up whitespace
+            text = re.sub(r'\s+', ' ', text)
+
+            # Return first 15000 characters
+            return text.strip()[:15000]
+        except Exception as e:
+            logger.warning(f"BeautifulSoup parsing failed, falling back to regex: {e}")
+            # Fallback to original regex approach
+            cleaned = re.sub(r"(?is)<(script|style).*?>.*?</\\1>", " ", html)
+            cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+            cleaned = re.sub(r"\s+", " ", cleaned)
+            return cleaned.strip()[:15000]
 
     def _extract_domain(self, url: str) -> str:
         try:

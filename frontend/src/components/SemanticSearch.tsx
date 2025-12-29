@@ -57,7 +57,7 @@ export function SemanticSearchResults({ query }: SemanticSearchResultsProps) {
       if (!query.trim()) return []
 
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001'
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
         const response = await fetch(
           `${apiUrl}/api/embeddings/search?query=${encodeURIComponent(query)}&limit=20&threshold=0.2`,
           {

@@ -18,8 +18,8 @@ router = APIRouter(prefix="/research", tags=["research"])
 @router.post("/topic", response_model=JobResponse)
 @limiter.limit("5/minute")
 async def research_topic(
-    http_request: Request,
-    request: ResearchRequest,
+    request: Request,
+    research_request: ResearchRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
@@ -44,15 +44,15 @@ async def research_topic(
     """
     try:
         # Create a job record
-        total_items = request.max_web_results + request.max_youtube_results
+        total_items = research_request.max_web_results + research_request.max_youtube_results
         job = Job(
             job_type="topic_research",
             status="pending",
             total_items=total_items,
             parameters={
-                "query": request.query,
-                "max_web_results": request.max_web_results,
-                "max_youtube_results": request.max_youtube_results
+                "query": research_request.query,
+                "max_web_results": research_request.max_web_results,
+                "max_youtube_results": research_request.max_youtube_results
             }
         )
         db.add(job)
@@ -63,10 +63,10 @@ async def research_topic(
         background_tasks.add_task(
             run_research_job,
             job.id,
-            request.model_dump()
+            research_request.model_dump()
         )
 
-        logger.info(f"Created research job {job.id} for topic: {request.query}")
+        logger.info(f"Created research job {job.id} for topic: {research_request.query}")
         return job
 
     except Exception as e:
