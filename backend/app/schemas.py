@@ -408,3 +408,68 @@ class JobStatusResponse(BaseModel):
     created_items: int
     error_message: Optional[str] = None
     result: Optional[Dict[str, Any]] = None
+
+
+# ============================================================================
+# Chat Schemas
+# ============================================================================
+
+class ChatSource(BaseModel):
+    """Source used to generate a response"""
+    title: str
+    url: str
+    snippet: str
+
+
+class MessageBase(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str
+
+
+class MessageCreate(MessageBase):
+    pass
+
+
+class MessageResponse(MessageBase):
+    id: int
+    conversation_id: int
+    sources: Optional[List[ChatSource]] = None
+    research_query: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationBase(BaseModel):
+    title: Optional[str] = None
+
+
+class ConversationCreate(ConversationBase):
+    pass
+
+
+class ConversationResponse(ConversationBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    message_count: Optional[int] = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationDetail(ConversationResponse):
+    messages: List[MessageResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatRequest(BaseModel):
+    """Request to send a message in a conversation"""
+    message: str = Field(..., min_length=1, max_length=2000)
+    conversation_id: Optional[int] = None  # If None, creates new conversation
+
+
+class ChatResponse(BaseModel):
+    """Response from the chat system"""
+    conversation_id: int
+    message: MessageResponse

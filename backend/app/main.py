@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import ingestion, articles, embeddings, auth, saved_articles, trends, jobs, research, digests, categories, websocket
+from app.routers import ingestion, articles, embeddings, auth, saved_articles, trends, jobs, research, digests, categories, websocket, chat
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -52,6 +52,7 @@ app.include_router(articles.router, prefix=settings.API_V1_PREFIX)
 app.include_router(embeddings.router, prefix=f"{settings.API_V1_PREFIX}/embeddings", tags=["embeddings"])
 app.include_router(trends.router, prefix=settings.API_V1_PREFIX)
 app.include_router(jobs.router, prefix=f"{settings.API_V1_PREFIX}/jobs", tags=["jobs"])
+app.include_router(chat.router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")

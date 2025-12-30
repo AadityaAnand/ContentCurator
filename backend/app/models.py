@@ -132,6 +132,7 @@ class User(Base):
     followed_topics = relationship("Category", secondary=user_followed_topics, back_populates="followed_by_users")
     saved_articles = relationship("Article", secondary=user_saved_articles, back_populates="saved_by_users")
     digests = relationship("Digest", back_populates="user", cascade="all, delete-orphan")
+    conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
 
 
 class Digest(Base):
@@ -193,3 +194,37 @@ class Job(Base):
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class Conversation(Base):
+    """Track chat conversations"""
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500))  # Auto-generated from first message
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan", order_by="Message.created_at")
+    user = relationship("User", back_populates="conversations")
+
+
+class Message(Base):
+    """Individual messages in a conversation"""
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey('conversations.id', ondelete='CASCADE'), nullable=False, index=True)
+    role = Column(String(20), nullable=False)  # 'user' or 'assistant'
+    content = Column(Text, nullable=False)
+
+    # For assistant messages
+    sources = Column(JSON)  # Array of {title, url, snippet} objects used to generate response
+    research_query = Column(String(500))  # The query used to research this response
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    # Relationships
+    conversation = relationship("Conversation", back_populates="messages")
