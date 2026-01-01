@@ -2,11 +2,11 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { articlesApi, categoriesApi, embeddingsApi } from '@/lib/api'
+import { articlesApi, categoriesApi, embeddingsApi, chatApi } from '@/lib/api'
 import { ArticleCard } from '@/components/ArticleCard'
 import { Pagination } from '@/components/Pagination'
 import { SearchModeToggle, SemanticSearchResults } from '@/components/SemanticSearch'
-import { Search, Filter, BookOpen, AlertCircle, Brain, Network, Loader2, CheckCircle2 } from 'lucide-react'
+import { Search, Filter, BookOpen, AlertCircle, Brain, Network, Loader2, CheckCircle2, MessageSquare } from 'lucide-react'
 
 export default function ArticlesPage() {
   const [page, setPage] = useState(1)
@@ -16,6 +16,7 @@ export default function ArticlesPage() {
   const [searchInput, setSearchInput] = useState('')
   const [searchMode, setSearchMode] = useState<'text' | 'semantic'>('text')
   const [semanticQuery, setSemanticQuery] = useState('')
+  const [showChatSources, setShowChatSources] = useState(false)
   const pageSize = 10
   const queryClient = useQueryClient()
 
@@ -30,6 +31,13 @@ export default function ArticlesPage() {
     queryKey: ['embeddingStats'],
     queryFn: embeddingsApi.getStats,
     refetchInterval: 10000, // Refresh every 10 seconds
+  })
+
+  // Fetch chat sources
+  const { data: chatSources, isLoading: chatSourcesLoading } = useQuery({
+    queryKey: ['chatSources'],
+    queryFn: () => chatApi.getChatSources(100),
+    enabled: showChatSources,
   })
 
   // Fetch articles
@@ -201,18 +209,113 @@ export default function ArticlesPage() {
                 <li><strong>Text Search:</strong> Find articles by title, content, or keywords</li>
                 <li><strong>Semantic Search:</strong> Discover related content using AI embeddings</li>
                 <li><strong>Filter:</strong> Narrow down by category or source type</li>
+                <li><strong>Chat Sources:</strong> View sources from research chat conversations</li>
                 <li>Looking to add new content? Visit <a href="/ingest" className="font-semibold underline">Ingest</a> page</li>
               </ul>
             </div>
           </div>
         </div>
+
+        {/* Chat Sources Toggle */}
+        <div className="mt-4">
+          <button
+            onClick={() => setShowChatSources(!showChatSources)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+              showChatSources
+                ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:border-purple-500'
+            }`}
+          >
+            <MessageSquare className="h-5 w-5" />
+            {showChatSources ? 'Viewing Chat Sources' : 'View Chat Sources'}
+          </button>
+        </div>
       </div>
 
-      {/* Search Mode Toggle */}
-      <SearchModeToggle mode={searchMode} onChange={setSearchMode} />
+      {/* Search Mode Toggle - hide when viewing chat sources */}
+      {!showChatSources && <SearchModeToggle mode={searchMode} onChange={setSearchMode} />}
 
-      {/* Semantic Search or Regular Search */}
-      {searchMode === 'semantic' ? (
+      {/* Chat Sources View */}
+      {showChatSources ? (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <MessageSquare className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              <h2 className="text-xl font-bold text-purple-900 dark:text-purple-100">
+                Research Chat Sources
+              </h2>
+            </div>
+            <p className="text-sm text-purple-700 dark:text-purple-300">
+              These are sources discovered and cited during your research chat conversations. Each source was used to answer your questions.
+            </p>
+          </div>
+
+          {chatSourcesLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+            </div>
+          ) : !chatSources || chatSources.length === 0 ? (
+            <div className="text-center py-12">
+              <MessageSquare className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <p className="text-gray-600 dark:text-gray-400 text-lg mb-2">
+                No chat sources yet
+              </p>
+              <p className="text-gray-500 dark:text-gray-500 text-sm mb-4">
+                Start a conversation in the Research Chat to build your source library
+              </p>
+              <a
+                href="/chat"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+              >
+                <MessageSquare className="h-4 w-4" />
+                Go to Chat
+              </a>
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {chatSources.map((source: any, index: number) => (
+                <div
+                  key={source.url || index}
+                  className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                      <MessageSquare className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 dark:text-white mb-1 line-clamp-2">
+                        {source.title}
+                      </h3>
+                      <span className="inline-block px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium rounded">
+                        Chat Source
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-3">
+                    {source.snippet || 'No preview available'}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium"
+                    >
+                      View Source →
+                    </a>
+                    <a
+                      href={`/chat`}
+                      className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                    >
+                      View in Chat
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : searchMode === 'semantic' ? (
         <div className="space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />

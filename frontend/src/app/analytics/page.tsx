@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Bell, TrendingUp, Zap, Activity, ArrowUp, ArrowDown, Minus } from 'lucide-react'
-import api from '@/lib/api'
+import { Bell, TrendingUp, Zap, Activity, ArrowUp, ArrowDown, Minus, MessageSquare, FileText, Link2 } from 'lucide-react'
+import { chatApi } from '@/lib/api'
 
 interface Trend {
   category_id: number
@@ -50,6 +50,13 @@ export default function AnalyticsPage() {
       return response.json()
     },
     refetchInterval: 60000, // Refresh every minute
+  })
+
+  // Fetch chat statistics
+  const { data: chatStats } = useQuery({
+    queryKey: ['chat-stats'],
+    queryFn: chatApi.getChatStats,
+    refetchInterval: 60000,
   })
 
   const getDirectionIcon = (direction: string) => {
@@ -125,6 +132,83 @@ export default function AnalyticsPage() {
             </div>
           </div>
         </div>
+
+        {/* Chat Statistics Section */}
+        {chatStats && (
+          <div className="mb-8">
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-6">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-4">
+                <MessageSquare className="w-6 h-6 text-purple-600" />
+                Research Chat Activity
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <MessageSquare className="w-10 h-10 text-purple-600 opacity-20" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Conversations</p>
+                      <p className="text-2xl font-bold text-gray-900">{chatStats.total_conversations}</p>
+                      <p className="text-xs text-green-600 mt-1">
+                        +{chatStats.recent_activity.conversations_last_7_days} this week
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-10 h-10 text-blue-600 opacity-20" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Messages</p>
+                      <p className="text-2xl font-bold text-gray-900">{chatStats.total_messages}</p>
+                      <p className="text-xs text-green-600 mt-1">
+                        +{chatStats.recent_activity.messages_last_7_days} this week
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <Link2 className="w-10 h-10 text-indigo-600 opacity-20" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Sources Cited</p>
+                      <p className="text-2xl font-bold text-gray-900">{chatStats.total_unique_sources}</p>
+                      <p className="text-xs text-gray-500 mt-1">Unique web sources</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <TrendingUp className="w-10 h-10 text-green-600 opacity-20" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Top Topics</p>
+                      <p className="text-2xl font-bold text-gray-900">{chatStats.top_research_topics.length}</p>
+                      <p className="text-xs text-gray-500 mt-1">Research areas</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Research Topics */}
+              {chatStats.top_research_topics.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Top Research Topics</h3>
+                  <div className="bg-white rounded-lg p-4 shadow-sm">
+                    <div className="space-y-2">
+                      {chatStats.top_research_topics.slice(0, 5).map((topic: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                          <span className="text-sm text-gray-700 flex-1">{topic.query}</span>
+                          <span className="text-xs font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded">
+                            {topic.count} {topic.count === 1 ? 'time' : 'times'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Summary Cards */}
         {summary && (

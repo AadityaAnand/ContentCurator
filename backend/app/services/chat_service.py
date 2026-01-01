@@ -108,6 +108,85 @@ class ChatService:
             db.rollback()
             raise
 
+    async def answer_question_stream(
+        self,
+        question: str,
+        conversation_id: Optional[int],
+        db: Session,
+        max_sources: int = 5
+    ):
+        """
+        Answer a question with streaming response.
+
+        Yields events:
+        - {"type": "conversation_id", "id": int}
+        - {"type": "sources", "sources": [...]}
+        - {"type": "chunk", "content": "..."}
+        - {"type": "done", "message_id": int}
+        """
+        try:
+            # Get or create conversation
+            if conversation_id:
+                conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+                if not conversation:
+                    raise ValueError(f"Conversation {conversation_id} not found")
+            else:
+                title = question[:100] + "..." if len(question) > 100 else question
+                conversation = Conversation(title=title)
+                db.add(conversation)
+                db.flush()
+                yield {"type": "conversation_id", "id": conversation.id}
+
+            # Store user message
+            user_message = Message(
+                conversation_id=conversation.id,
+                role="user",
+                content=question
+            )
+            db.add(user_message)
+            db.commit()
+
+            # Get conversation context (last 5 messages for follow-ups)
+            context_messages = db.query(Message)\
+                .filter(Message.conversation_id == conversation.id)\
+                .order_by(Message.created_at.desc())\
+                .limit(6)\
+                .all()
+            context_messages.reverse()  # Oldest first
+
+            # Research the question
+            sources = await self._research_question(question, max_sources)
+            yield {"type": "sources", "sources": sources}
+
+            if not sources:
+                answer = "I couldn't find any relevant sources to answer your question. Could you try rephrasing it or asking something else?"
+                yield {"type": "chunk", "content": answer}
+            else:
+                # Synthesize answer with streaming and context
+                full_answer = ""
+                async for chunk in self._synthesize_answer_stream(question, sources, context_messages[:-1]):  # Exclude current message
+                    full_answer += chunk
+                    yield {"type": "chunk", "content": chunk}
+
+                # Save complete assistant message
+                assistant_message = Message(
+                    conversation_id=conversation.id,
+                    role="assistant",
+                    content=full_answer,
+                    sources=sources,
+                    research_query=question
+                )
+                db.add(assistant_message)
+                db.commit()
+                db.refresh(assistant_message)
+
+                yield {"type": "done", "message_id": assistant_message.id}
+
+        except Exception as e:
+            logger.error(f"Error in streaming answer: {e}")
+            db.rollback()
+            raise
+
     async def _research_question(self, question: str, max_sources: int) -> List[Dict]:
         """
         Research a question using Tavily search.
@@ -236,6 +315,105 @@ ANSWER:"""
             for i, source in enumerate(sources, 1):
                 fallback += f"{i}. **{source['title']}**\n   {source['snippet'][:200]}...\n   [Read more]({source['url']})\n\n"
             return fallback
+
+    async def _synthesize_answer_stream(self, question: str, sources: List[Dict], context_messages: List[Message] = None):
+        """
+        Stream the answer synthesis with conversation context for follow-ups.
+
+        Yields chunks of text as they're generated.
+        """
+        import httpx
+
+        # Build context from sources
+        context_parts = []
+        for i, source in enumerate(sources, 1):
+            context_parts.append(
+                f"[{i}] {source['title']}\n"
+                f"URL: {source['url']}\n"
+                f"Content: {source['snippet']}\n"
+            )
+
+        context = "\n\n".join(context_parts)
+
+        # Build conversation history for follow-ups
+        conversation_context = ""
+        if context_messages:
+            history = []
+            for msg in context_messages:
+                role = "User" if msg.role == "user" else "Assistant"
+                history.append(f"{role}: {msg.content[:200]}")  # Truncate long messages
+            if history:
+                conversation_context = "\n\nPREVIOUS CONVERSATION:\n" + "\n".join(history) + "\n"
+
+        # Create prompt with context awareness
+        prompt = f"""You are a helpful research assistant. Answer the user's question using ONLY the provided sources.
+
+{conversation_context}
+Include citations in your answer using [1], [2], etc. to reference the sources.
+
+IMPORTANT RULES:
+1. Only use information from the provided sources
+2. If this is a follow-up question, reference the previous conversation
+3. Add citations [1], [2] after statements to show which source
+4. Be concise but comprehensive
+5. If sources contradict each other, mention both views
+6. At the end, include a "Sources:" section listing all references
+
+SOURCES:
+{context}
+
+USER QUESTION:
+{question}
+
+ANSWER:"""
+
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                async with client.stream(
+                    "POST",
+                    "http://localhost:11434/api/chat",
+                    json={
+                        "model": settings.OLLAMA_MODEL,
+                        "messages": [
+                            {"role": "system", "content": "You are a helpful research assistant that answers questions using provided sources with citations."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "stream": True,
+                        "options": {
+                            "temperature": 0.3,
+                            "num_predict": 1000
+                        }
+                    }
+                ) as response:
+                    response.raise_for_status()
+
+                    full_answer = ""
+                    async for line in response.aiter_lines():
+                        if line:
+                            try:
+                                import json
+                                data = json.loads(line)
+                                if "message" in data and "content" in data["message"]:
+                                    chunk = data["message"]["content"]
+                                    full_answer += chunk
+                                    yield chunk
+                            except json.JSONDecodeError:
+                                continue
+
+                    # Add sources if not present
+                    if "Sources:" not in full_answer and "SOURCES:" not in full_answer:
+                        sources_section = "\n\n**Sources:**\n"
+                        for i, source in enumerate(sources, 1):
+                            sources_section += f"{i}. [{source['title']}]({source['url']})\n"
+                        yield sources_section
+
+        except Exception as e:
+            logger.error(f"Error streaming answer: {e}")
+            # Fallback
+            fallback = f"I found {len(sources)} relevant sources:\n\n"
+            for i, source in enumerate(sources, 1):
+                fallback += f"{i}. [{source['title']}]({source['url']})\n"
+            yield fallback
 
     def get_conversation(self, conversation_id: int, db: Session) -> Optional[Conversation]:
         """Get a conversation with all messages."""

@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
+import { Loader2, ZoomIn, ZoomOut, RotateCcw, MessageSquare } from 'lucide-react'
 import * as d3 from 'd3'
+import { chatApi } from '@/lib/api'
 
 interface Article {
   id: number
@@ -67,10 +68,11 @@ export default function GraphPage() {
   const [selectedNode, setSelectedNode] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<'force' | 'radial' | 'hierarchical'>('force')
   const [showInfo, setShowInfo] = useState(true)
+  const [showChatGraph, setShowChatGraph] = useState(false)
 
 
 
-  // Fetch graph data using optimized endpoint
+  // Fetch article graph data using optimized endpoint
   const { data: graphData, isLoading: connectionsLoading, error: graphError } = useQuery({
     queryKey: ['graph-data'],
     queryFn: async () => {
@@ -78,19 +80,56 @@ export default function GraphPage() {
       const response = await fetch(`${apiUrl}/api/embeddings/graph?min_similarity=0.5&limit=100`)
       if (!response.ok) throw new Error('Failed to fetch graph data')
       const data = await response.json()
-      
+
       return {
         nodes: data.nodes.map((n: any) => ({ id: n.id, title: n.title })),
         links: data.edges.map((e: any) => ({ source: e.source, target: e.target, strength: e.similarity }))
       }
     },
     retry: 2,
+    enabled: !showChatGraph,
+  })
+
+  // Fetch chat graph data
+  const { data: chatGraphData, isLoading: chatGraphLoading, error: chatGraphError } = useQuery({
+    queryKey: ['chat-graph-data'],
+    queryFn: () => chatApi.getChatGraphData(50),
+    retry: 2,
+    enabled: showChatGraph,
   })
 
   // Initialize D3 graph
   useEffect(() => {
-    if (!graphData || !graphData.nodes || graphData.nodes.length === 0 || !svgRef.current || !containerRef.current) {
+    const currentGraphData = showChatGraph ? chatGraphData : graphData
+
+    if (!currentGraphData || !svgRef.current || !containerRef.current) {
       return
+    }
+
+    // For chat graph, transform data structure
+    let nodes, links
+    if (showChatGraph) {
+      if (!currentGraphData.nodes || currentGraphData.nodes.length === 0) {
+        return
+      }
+      nodes = currentGraphData.nodes.map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        type: n.type,
+        source_count: n.source_count || 0
+      }))
+      links = currentGraphData.edges?.map((e: any) => ({
+        source: e.source,
+        target: e.target,
+        strength: 0.8,
+        type: e.type
+      })) || []
+    } else {
+      if (!currentGraphData.nodes || currentGraphData.nodes.length === 0) {
+        return
+      }
+      nodes = currentGraphData.nodes
+      links = currentGraphData.links
     }
 
     const width = containerRef.current.clientWidth
@@ -121,30 +160,30 @@ export default function GraphPage() {
 
     if (viewMode === 'force') {
       simulation = d3
-        .forceSimulation(graphData.nodes as any)
-        .force('link', d3.forceLink(graphData.links).id((d: any) => d.id).distance(150))
+        .forceSimulation(nodes as any)
+        .force('link', d3.forceLink(links).id((d: any) => d.id).distance(150))
         .force('charge', d3.forceManyBody().strength(-400))
         .force('center', d3.forceCenter(width / 2, height / 2))
         .force('collision', d3.forceCollide().radius(60))
     } else if (viewMode === 'radial') {
       // Radial layout - strongest connections in center
-      const centerNode = graphData.nodes[0]
+      const centerNode = nodes[0]
       const radius = Math.min(width, height) / 3
-      
-      graphData.nodes.forEach((node: any, i: number) => {
-        const angle = (i / graphData.nodes.length) * 2 * Math.PI
+
+      nodes.forEach((node: any, i: number) => {
+        const angle = (i / nodes.length) * 2 * Math.PI
         node.fx = width / 2 + radius * Math.cos(angle)
         node.fy = height / 2 + radius * Math.sin(angle)
       })
     } else if (viewMode === 'hierarchical') {
       // Hierarchical layout - organize by connection strength
       const nodeConnections = new Map<number, number>()
-      graphData.links.forEach((link: any) => {
+      links.forEach((link: any) => {
         nodeConnections.set(link.source, (nodeConnections.get(link.source) || 0) + 1)
         nodeConnections.set(link.target, (nodeConnections.get(link.target) || 0) + 1)
       })
 
-      const sortedNodes = [...graphData.nodes].sort((a: any, b: any) => 
+      const sortedNodes = [...nodes].sort((a: any, b: any) =>
         (nodeConnections.get(b.id) || 0) - (nodeConnections.get(a.id) || 0)
       )
 
@@ -172,41 +211,54 @@ export default function GraphPage() {
       .attr('stop-color', '#6366f1')
       .attr('stop-opacity', 0.8)
 
-    const links = g
+    const linkElements = g
       .append('g')
       .selectAll('line')
-      .data(graphData.links as any)
+      .data(links as any)
       .join('line')
-      .attr('stroke', (d: any) => d.strength > 0.7 ? '#6366f1' : d.strength > 0.5 ? '#8b5cf6' : '#94a3b8')
-      .attr('stroke-opacity', (d: any) => 0.3 + d.strength * 0.5)
-      .attr('stroke-width', (d: any) => 1 + d.strength * 3)
-      .attr('stroke-dasharray', (d: any) => d.strength < 0.5 ? '5,5' : '0')
+      .attr('stroke', (d: any) => {
+        if (showChatGraph) return '#8b5cf6' // Purple for chat
+        return d.strength > 0.7 ? '#6366f1' : d.strength > 0.5 ? '#8b5cf6' : '#94a3b8'
+      })
+      .attr('stroke-opacity', (d: any) => 0.3 + (d.strength || 0.5) * 0.5)
+      .attr('stroke-width', (d: any) => 1 + (d.strength || 0.5) * 3)
+      .attr('stroke-dasharray', (d: any) => (d.strength || 0.5) < 0.5 ? '5,5' : '0')
 
     // Create node groups
     const nodeGroups = g
       .append('g')
       .selectAll('g')
-      .data(graphData.nodes as any)
+      .data(nodes as any)
       .join('g')
       .attr('cursor', 'pointer')
       .on('click', (event: any, d: any) => {
         event.stopPropagation()
         setSelectedNode(d.id)
-        window.location.href = `/articles/${d.id}`
+        if (!showChatGraph) {
+          window.location.href = `/articles/${d.id}`
+        } else {
+          window.location.href = `/chat`
+        }
       })
 
-    // Add node circles with size based on connections
+    // Add node circles with size based on connections or type
     nodeGroups
       .append('circle')
       .attr('r', (d: any) => {
-        const connections = graphData.links.filter((l: any) => 
+        if (showChatGraph) {
+          return d.type === 'assistant' ? 15 : 12
+        }
+        const connections = links.filter((l: any) =>
           l.source === d.id || l.target === d.id
         ).length
         return 10 + connections * 2
       })
       .attr('fill', (d: any) => {
         if (d.id === selectedNode) return '#4f46e5'
-        const connections = graphData.links.filter((l: any) => 
+        if (showChatGraph) {
+          return d.type === 'assistant' ? '#8b5cf6' : '#06b6d4'
+        }
+        const connections = links.filter((l: any) =>
           l.source === d.id || l.target === d.id
         ).length
         return connections > 2 ? '#f59e0b' : connections > 1 ? '#06b6d4' : '#10b981'
@@ -235,7 +287,10 @@ export default function GraphPage() {
       .attr('fill', '#fff')
       .attr('pointer-events', 'none')
       .text((d: any) => {
-        const connections = graphData.links.filter((l: any) => 
+        if (showChatGraph && d.source_count) {
+          return d.source_count
+        }
+        const connections = links.filter((l: any) =>
           l.source === d.id || l.target === d.id
         ).length
         return connections
@@ -263,7 +318,7 @@ export default function GraphPage() {
 
       // Update positions on simulation tick
       simulation.on('tick', () => {
-        links
+        linkElements
           .attr('x1', (d: any) => d.source.x)
           .attr('y1', (d: any) => d.source.y)
           .attr('x2', (d: any) => d.target.x)
@@ -273,7 +328,7 @@ export default function GraphPage() {
       })
     } else {
       // Static positioning for radial and hierarchical
-      links
+      linkElements
         .attr('x1', (d: any) => d.source.fx)
         .attr('y1', (d: any) => d.source.fy)
         .attr('x2', (d: any) => d.target.fx)
@@ -286,7 +341,7 @@ export default function GraphPage() {
     return () => {
       if (simulation) simulation.stop()
     }
-  }, [graphData, selectedNode, viewMode])
+  }, [graphData, chatGraphData, selectedNode, viewMode, showChatGraph])
 
   const handleZoomIn = () => {
     setZoom((z) => Math.min(z * 1.2, 5))
@@ -309,7 +364,9 @@ export default function GraphPage() {
     }
   }
 
-  const isLoading = connectionsLoading
+  const isLoading = showChatGraph ? chatGraphLoading : connectionsLoading
+  const currentError = showChatGraph ? chatGraphError : graphError
+  const currentData = showChatGraph ? chatGraphData : graphData
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-gray-900">
@@ -322,10 +379,14 @@ export default function GraphPage() {
               Interactive visualization of article relationships
             </p>
           </div>
-          {graphData && (
+          {currentData && (
             <div className="text-sm text-gray-600 dark:text-gray-400">
-              <span className="font-semibold">{graphData.nodes?.length || 0}</span> articles •{' '}
-              <span className="font-semibold">{graphData.links?.length || 0}</span> connections
+              <span className="font-semibold">
+                {showChatGraph ? currentData.nodes?.length || 0 : currentData.nodes?.length || 0}
+              </span> {showChatGraph ? 'messages' : 'articles'} •{' '}
+              <span className="font-semibold">
+                {showChatGraph ? currentData.edges?.length || 0 : currentData.links?.length || 0}
+              </span> connections
             </div>
           )}
         </div>
@@ -335,6 +396,18 @@ export default function GraphPage() {
       <div className="sticky top-[120px] z-10 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 py-3 px-4 sm:px-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
+            {/* Graph Type Toggle */}
+            <button
+              onClick={() => setShowChatGraph(!showChatGraph)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                showChatGraph
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+              }`}
+            >
+              <MessageSquare className="h-4 w-4" />
+              {showChatGraph ? 'Chat Graph' : 'Article Graph'}
+            </button>
             <button
               onClick={() => setViewMode('force')}
               className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
@@ -407,32 +480,51 @@ export default function GraphPage() {
           </div>
         )}
 
-        {graphError && (
+        {currentError && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
             <div className="flex flex-col items-center gap-3 text-center max-w-sm">
               <p className="text-red-600 dark:text-red-400 font-semibold">Failed to load graph</p>
               <p className="text-gray-700 dark:text-gray-300 text-sm">
-                Make sure you have articles with embeddings. Visit the Ingest page to add content.
+                {showChatGraph
+                  ? 'Make sure you have chat conversations. Visit the Chat page to start researching.'
+                  : 'Make sure you have articles with embeddings. Visit the Ingest page to add content.'}
               </p>
-              <a href="/ingest" className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">
-                Go to Ingest
+              <a href={showChatGraph ? "/chat" : "/ingest"} className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">
+                {showChatGraph ? 'Go to Chat' : 'Go to Ingest'}
               </a>
             </div>
           </div>
         )}
 
-        {!isLoading && !graphError && graphData && graphData.nodes.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-3 text-center max-w-sm">
-              <p className="text-gray-700 dark:text-gray-300 font-semibold">No graph data available</p>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">
-                You need articles with embeddings to see the knowledge graph. Start by ingesting content.
-              </p>
-              <a href="/ingest" className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">
-                Add Content
-              </a>
-            </div>
-          </div>
+        {!isLoading && !currentError && currentData && (
+          showChatGraph
+            ? (currentData.nodes?.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+                <div className="flex flex-col items-center gap-3 text-center max-w-sm">
+                  <MessageSquare className="h-12 w-12 text-gray-400" />
+                  <p className="text-gray-700 dark:text-gray-300 font-semibold">No chat conversations yet</p>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">
+                    Start a conversation in the Research Chat to see your conversation graph.
+                  </p>
+                  <a href="/chat" className="mt-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm">
+                    Start Chatting
+                  </a>
+                </div>
+              </div>
+            ))
+            : (currentData.nodes?.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
+                <div className="flex flex-col items-center gap-3 text-center max-w-sm">
+                  <p className="text-gray-700 dark:text-gray-300 font-semibold">No graph data available</p>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">
+                    You need articles with embeddings to see the knowledge graph. Start by ingesting content.
+                  </p>
+                  <a href="/ingest" className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">
+                    Add Content
+                  </a>
+                </div>
+              </div>
+            ))
         )}
 
         <svg ref={svgRef} className="w-full h-full" style={{ touchAction: 'manipulation' }} />
